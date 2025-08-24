@@ -22,8 +22,6 @@ jobs:
           # Previous version support
           - otp: '26.0'
             elixir: '1.17.3'
-          - otp: '26.0'
-            elixir: '1.16.3'
           
     steps:
     - uses: actions/checkout@v4

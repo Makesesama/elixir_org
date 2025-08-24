@@ -5,7 +5,7 @@ defmodule Org.Mixfile do
     [
       app: :org,
       version: "0.1.1",
-      elixir: "~> 1.18",
+      elixir: "~> 1.17 or ~> 1.18",
       start_permanent: Mix.env() == :prod,
       package: package(),
       deps: deps(),
