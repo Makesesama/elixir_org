@@ -5,20 +5,25 @@ defmodule Org.Mixfile do
     [
       app: :org,
       version: "0.1.1",
-      elixir: "~> 1.5",
-      start_permanent: Mix.env == :prod,
+      elixir: "~> 1.18",
+      start_permanent: Mix.env() == :prod,
       package: package(),
       deps: deps(),
       description: "org-mode parser",
+      source_url: "https://github.com/Makesesama/elixir_org",
+      docs: [
+        main: "Org",
+        extras: ["README.md"]
+      ]
     ]
   end
 
   defp package do
     [
       licenses: ["MIT"],
-      maintainers: ["Niklas Cathor"],
+      maintainers: ["Makesesama"],
       links: %{
-        "GitHub" => "https://github.com/nilclass/elixir_org"
+        "GitHub" => "https://github.com/Makesesama/elixir_org"
       }
     ]
   end
@@ -35,8 +40,8 @@ defmodule Org.Mixfile do
     [
       # {:dep_from_hexpm, "~> 0.3.0"},
       # {:dep_from_git, git: "https://github.com/elixir-lang/my_dep.git", tag: "0.1.0"},
-      {:ex_doc, "~> 0.16", only: :dev, runtime: false},
-      {:dialyxir, "~> 0.5.1"}
+      {:ex_doc, "~> 0.35", only: :dev, runtime: false},
+      {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false}
     ]
   end
 end

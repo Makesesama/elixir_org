@@ -31,7 +31,7 @@ defmodule Org.Section do
                       [first | rest] -> {first, rest}
                       [] -> {%Org.Section{}, []}
                     end
-    %Org.Section{parent | children: [add_nested(first || %Org.Section{}, level - 1, child) | rest]}
+    %Org.Section{parent | children: [add_nested(first, level - 1, child) | rest]}
   end
 
   def reverse_recursive(section) do
