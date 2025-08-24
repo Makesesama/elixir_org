@@ -3,6 +3,15 @@
 # Simple Org-mode to HTML converter example
 # Usage: elixir converter.exs sample.org output.html
 
+# Add the project root to the code path
+project_root = Path.join(__DIR__, "../..")
+Code.prepend_path(Path.join(project_root, "_build/dev/lib/org/ebin"))
+
+# Load the main Mix project
+Mix.install([
+  {:org, path: project_root}
+])
+
 defmodule OrgToHtml do
   @moduledoc """
   A simple converter that transforms org-mode documents to HTML.
@@ -30,23 +39,68 @@ defmodule OrgToHtml do
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>Org Document</title>
         <style>
-            body { font-family: 'Segoe UI', sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; line-height: 1.6; }
-            h1 { color: #2c3e50; border-bottom: 2px solid #3498db; }
-            h2 { color: #34495e; border-bottom: 1px solid #bdc3c7; }
+            body { 
+                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+                max-width: 800px; 
+                margin: 0 auto; 
+                padding: 20px; 
+                line-height: 1.6; 
+                color: #333;
+            }
+            h1 { color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 10px; }
+            h2 { color: #34495e; border-bottom: 1px solid #bdc3c7; padding-bottom: 5px; }
             h3 { color: #7f8c8d; }
             .todo { color: #e74c3c; font-weight: bold; }
             .done { color: #27ae60; font-weight: bold; }
-            .priority-A { color: #e74c3c; }
-            .priority-B { color: #f39c12; }
-            .priority-C { color: #3498db; }
-            table { border-collapse: collapse; width: 100%; margin: 20px 0; }
+            .priority-A { color: #e74c3c; font-weight: bold; }
+            .priority-B { color: #f39c12; font-weight: bold; }
+            .priority-C { color: #3498db; font-weight: bold; }
+            table { border-collapse: collapse; width: 100%; margin: 20px 0; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
             th, td { border: 1px solid #bdc3c7; padding: 10px; text-align: left; }
-            th { background-color: #ecf0f1; }
-            pre { background-color: #f8f9fa; padding: 15px; border-left: 4px solid #3498db; overflow-x: auto; }
-            code { background-color: #f8f9fa; padding: 2px 4px; border-radius: 3px; }
+            th { background-color: #ecf0f1; font-weight: bold; }
+            pre { 
+                background-color: #f8f9fa; 
+                padding: 15px; 
+                border-left: 4px solid #3498db; 
+                overflow-x: auto; 
+                border-radius: 4px;
+                font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            }
+            code { 
+                background-color: #f1f3f4; 
+                padding: 2px 6px; 
+                border-radius: 3px; 
+                font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+                font-size: 0.9em;
+                border: 1px solid #e1e5e9;
+            }
+            code.verbatim { 
+                background-color: #e8f5e8; 
+                color: #2c3e50; 
+                border: 1px solid #a4d4a4;
+            }
+            strong { 
+                font-weight: bold; 
+                color: #2c3e50;
+            }
+            em { 
+                font-style: italic; 
+                color: #34495e;
+            }
+            u { 
+                text-decoration: underline; 
+                text-decoration-color: #3498db;
+                text-underline-offset: 2px;
+            }
+            del { 
+                text-decoration: line-through; 
+                color: #7f8c8d; 
+                opacity: 0.7;
+            }
             ul, ol { margin: 20px 0; }
             li { margin: 5px 0; }
             ul ul, ol ol, ul ol, ol ul { margin: 10px 0; }
+            p { margin: 15px 0; }
         </style>
     </head>
     <body>
@@ -98,8 +152,12 @@ defmodule OrgToHtml do
   end
 
   defp content_to_html(%Org.Paragraph{lines: lines}) do
-    content = lines |> Enum.join(" ") |> String.trim()
-    if content != "", do: "<p>#{content}</p>", else: ""
+    html_content =
+      lines
+      |> Enum.map_join(" ", &line_to_html/1)
+      |> String.trim()
+
+    if html_content != "", do: "<p>#{html_content}</p>", else: ""
   end
 
   defp content_to_html(%Org.Table{rows: rows}) do
@@ -178,9 +236,40 @@ defmodule OrgToHtml do
           """
       end
 
+    # Parse content for formatting
+    formatted_content = Org.FormattedText.parse(content)
+    content_html = line_to_html(formatted_content)
+
     """
-    <li>#{escape_html(content)}#{children_html}</li>
+    <li>#{content_html}#{children_html}</li>
     """
+  end
+
+  # Convert a line (string or FormattedText) to HTML
+  defp line_to_html(%Org.FormattedText{spans: spans}) do
+    Enum.map_join(spans, "", &span_to_html/1)
+  end
+
+  defp line_to_html(line) when is_binary(line) do
+    escape_html(line)
+  end
+
+  # Convert a formatted text span to HTML
+  defp span_to_html(%Org.FormattedText.Span{format: format, content: content}) do
+    escaped_content = escape_html(content)
+
+    case format do
+      :bold -> "<strong>#{escaped_content}</strong>"
+      :italic -> "<em>#{escaped_content}</em>"
+      :underline -> "<u>#{escaped_content}</u>"
+      :code -> "<code>#{escaped_content}</code>"
+      :verbatim -> "<code class=\"verbatim\">#{escaped_content}</code>"
+      :strikethrough -> "<del>#{escaped_content}</del>"
+    end
+  end
+
+  defp span_to_html(text) when is_binary(text) do
+    escape_html(text)
   end
 
   defp escape_html(text) do

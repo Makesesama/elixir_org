@@ -5,40 +5,85 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Org Document</title>
     <style>
-        body { font-family: 'Segoe UI', sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; line-height: 1.6; }
-        h1 { color: #2c3e50; border-bottom: 2px solid #3498db; }
-        h2 { color: #34495e; border-bottom: 1px solid #bdc3c7; }
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            max-width: 800px; 
+            margin: 0 auto; 
+            padding: 20px; 
+            line-height: 1.6; 
+            color: #333;
+        }
+        h1 { color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 10px; }
+        h2 { color: #34495e; border-bottom: 1px solid #bdc3c7; padding-bottom: 5px; }
         h3 { color: #7f8c8d; }
         .todo { color: #e74c3c; font-weight: bold; }
         .done { color: #27ae60; font-weight: bold; }
-        .priority-A { color: #e74c3c; }
-        .priority-B { color: #f39c12; }
-        .priority-C { color: #3498db; }
-        table { border-collapse: collapse; width: 100%; margin: 20px 0; }
+        .priority-A { color: #e74c3c; font-weight: bold; }
+        .priority-B { color: #f39c12; font-weight: bold; }
+        .priority-C { color: #3498db; font-weight: bold; }
+        table { border-collapse: collapse; width: 100%; margin: 20px 0; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
         th, td { border: 1px solid #bdc3c7; padding: 10px; text-align: left; }
-        th { background-color: #ecf0f1; }
-        pre { background-color: #f8f9fa; padding: 15px; border-left: 4px solid #3498db; overflow-x: auto; }
-        code { background-color: #f8f9fa; padding: 2px 4px; border-radius: 3px; }
+        th { background-color: #ecf0f1; font-weight: bold; }
+        pre { 
+            background-color: #f8f9fa; 
+            padding: 15px; 
+            border-left: 4px solid #3498db; 
+            overflow-x: auto; 
+            border-radius: 4px;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+        }
+        code { 
+            background-color: #f1f3f4; 
+            padding: 2px 6px; 
+            border-radius: 3px; 
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            font-size: 0.9em;
+            border: 1px solid #e1e5e9;
+        }
+        code.verbatim { 
+            background-color: #e8f5e8; 
+            color: #2c3e50; 
+            border: 1px solid #a4d4a4;
+        }
+        strong { 
+            font-weight: bold; 
+            color: #2c3e50;
+        }
+        em { 
+            font-style: italic; 
+            color: #34495e;
+        }
+        u { 
+            text-decoration: underline; 
+            text-decoration-color: #3498db;
+            text-underline-offset: 2px;
+        }
+        del { 
+            text-decoration: line-through; 
+            color: #7f8c8d; 
+            opacity: 0.7;
+        }
         ul, ol { margin: 20px 0; }
         li { margin: 5px 0; }
         ul ul, ol ol, ul ol, ol ul { margin: 10px 0; }
+        p { margin: 15px 0; }
     </style>
 </head>
 <body>
 <h1><span class="todo">TODO</span> <span class="priority-A">[#A]</span> Project Setup</h1>
-<p>Setup the initial project structure and dependencies.</p>
+<p>Setup the initial project structure and dependencies. This is a <strong>critical</strong> task that requires <em>immediate attention</em> and <u>careful planning</u>.</p>
 <h2><span class="done">DONE</span> <span class="priority-B">[#B]</span> Repository Creation</h2>
-<p>Created the git repository and initial structure.</p>
+<p>Created the git repository and initial structure. Used <code>git init</code> command and configured <code class="verbatim">.gitignore</code> file properly.</p>
 
 
 <h2><span class="todo">TODO</span> <span class="priority-A">[#A]</span> Dependencies</h2>
-<p>Install required dependencies:</p>
+<p>Install required dependencies (<strong>high priority</strong>):</p>
 <ul>
-<li>Database setup</li>
+<li>Database setup (<em>PostgreSQL</em> recommended)</li>
 
-<li>Web framework</li>
+<li>Web framework (<u>Phoenix</u> or <u>Rails</u>)</li>
 
-<li>Testing tools</li>
+<li>Testing tools (<code>pytest</code> or <code class="verbatim">ExUnit</code>)</li>
 
 </ul>
 
@@ -46,7 +91,7 @@
 
 
 <h1><span class="done">DONE</span> Documentation</h1>
-<p>Write comprehensive documentation for the project.</p>
+<p>Write comprehensive documentation for the project. <del>Old approach was insufficient</del> but now we have <strong>complete</strong> <em>API documentation</em> with <u>proper examples</u> and <code>code samples</code>.</p>
 <table>
 <tr><td>Feature</td><td>Status</td><td>Priority</td></tr>
 
@@ -58,13 +103,13 @@
 
 
 <h1>Code Examples</h1>
-<p>Here's a simple function:</p>
+<p>Here&#39;s a simple function:</p>
 <pre><code class="language-elixir">def hello(name) do
   IO.puts(&quot;Hello, #{name}!&quot;)
 end</code></pre>
 
 <h2>Implementation Notes</h2>
-<p>The function should handle edge cases like empty names.</p>
+<p>The function should handle edge cases like <strong>empty names</strong>, <em>nil values</em>, and <u>special characters</u>. Use <code>String.trim()</code> to clean input and <code class="verbatim">Logger.warn()</code> for debugging.</p>
 
 
 
@@ -72,23 +117,23 @@ end</code></pre>
 
 <h2>Development Tasks</h2>
 <ul>
-<li>Mobile app development<ul>
-<li>iOS implementation</li>
+<li><strong>Mobile app development</strong> (<em>high impact</em>)<ul>
+<li><u>iOS implementation</u> using <code>Swift</code></li>
 
-<li>Android implementation</li>
-
-</ul>
-</li>
-
-<li>API improvements<ul>
-<li>Authentication upgrade</li>
-
-<li>Rate limiting</li>
+<li><u>Android implementation</u> using <code class="verbatim">Kotlin</code></li>
 
 </ul>
 </li>
 
-<li>Performance optimization</li>
+<li><strong>API improvements</strong> (<del>legacy code cleanup</del>)<ul>
+<li><em>Authentication upgrade</em> to <code>OAuth2</code></li>
+
+<li><u>Rate limiting</u> with <code class="verbatim">Redis</code> backend</li>
+
+</ul>
+</li>
+
+<li><strong>Performance optimization</strong> (<em>critical for scaling</em>)</li>
 
 </ul>
 
@@ -96,17 +141,17 @@ end</code></pre>
 
 <h2>Priority List</h2>
 <ol>
-<li>Security audit</li>
+<li><strong>Security audit</strong> (<del>previous audit failed</del>)</li>
 
-<li>User experience improvements<ul>
-<li>Better navigation</li>
+<li><em>User experience improvements</em> (<u>essential for retention</u>)<ul>
+<li><u>Better navigation</u> using <code>breadcrumbs</code></li>
 
-<li>Faster loading times</li>
+<li><strong>Faster loading times</strong> with <code class="verbatim">caching</code></li>
 
 </ul>
 </li>
 
-<li>Documentation updates</li>
+<li><u>Documentation updates</u> (<em>quarterly review</em>)</li>
 
 </ol>
 

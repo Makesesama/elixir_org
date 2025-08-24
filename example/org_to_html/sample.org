@@ -2,19 +2,19 @@
 #+AUTHOR: John Doe
 
 * TODO [#A] Project Setup
-Setup the initial project structure and dependencies.
+Setup the initial project structure and dependencies. This is a *critical* task that requires /immediate attention/ and _careful planning_.
 
-** DONE [#B] Repository Creation
-Created the git repository and initial structure.
+** DONE [#B] Repository Creation  
+Created the git repository and initial structure. Used =git init= command and configured ~.gitignore~ file properly.
 
 ** TODO [#A] Dependencies
-Install required dependencies:
-- Database setup
-- Web framework
-- Testing tools
+Install required dependencies (*high priority*):
+- Database setup (/PostgreSQL/ recommended)
+- Web framework (_Phoenix_ or _Rails_)
+- Testing tools (=pytest= or ~ExUnit~)
 
 * DONE Documentation
-Write comprehensive documentation for the project.
+Write comprehensive documentation for the project. +Old approach was insufficient+ but now we have *complete* /API documentation/ with _proper examples_ and =code samples=.
 
 | Feature    | Status   | Priority |
 |------------+----------+----------|
@@ -33,22 +33,22 @@ end
 #+END_SRC
 
 ** Implementation Notes
-The function should handle edge cases like empty names.
+The function should handle edge cases like *empty names*, /nil values/, and _special characters_. Use =String.trim()= to clean input and ~Logger.warn()~ for debugging.
 
 * Future Plans
 
 ** Development Tasks
-- Mobile app development
-  - iOS implementation
-  - Android implementation
-- API improvements
-  - Authentication upgrade
-  - Rate limiting
-- Performance optimization
+- *Mobile app development* (/high impact/)
+  - _iOS implementation_ using =Swift=
+  - _Android implementation_ using ~Kotlin~
+- *API improvements* (+legacy code cleanup+)
+  - /Authentication upgrade/ to =OAuth2=
+  - _Rate limiting_ with ~Redis~ backend
+- *Performance optimization* (/critical for scaling/)
 
 ** Priority List
-1. Security audit
-2. User experience improvements
-   - Better navigation
-   - Faster loading times
-3. Documentation updates
+1. *Security audit* (+previous audit failed+)
+2. /User experience improvements/ (_essential for retention_)
+   - _Better navigation_ using =breadcrumbs=
+   - *Faster loading times* with ~caching~
+3. _Documentation updates_ (/quarterly review/)

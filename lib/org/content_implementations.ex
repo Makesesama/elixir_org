@@ -19,29 +19,56 @@ defimpl Org.Content, for: Org.Paragraph do
   end
 
   def validate(%Org.Paragraph{lines: lines}) when is_list(lines) do
-    if Enum.all?(lines, &is_binary/1) do
+    if Enum.all?(lines, &valid_line?/1) do
       {:ok, %Org.Paragraph{lines: lines}}
     else
-      {:error, "All paragraph lines must be strings"}
+      {:error, "All paragraph lines must be strings or formatted text"}
     end
   end
 
   def validate(_), do: {:error, "Invalid paragraph structure"}
 
   def to_text(%Org.Paragraph{lines: lines}) do
-    Enum.join(lines, "\n")
+    Enum.map_join(lines, "\n", &line_to_text/1)
   end
 
   def metadata(%Org.Paragraph{lines: lines}) do
+    plain_text = to_text(%Org.Paragraph{lines: lines})
+
     %{
       line_count: length(lines),
-      character_count: lines |> Enum.join("\n") |> String.length(),
-      word_count: lines |> Enum.join(" ") |> String.split() |> length()
+      character_count: String.length(plain_text),
+      word_count: plain_text |> String.split() |> length(),
+      formatted_lines: count_formatted_lines(lines)
     }
   end
 
   def empty?(%Org.Paragraph{lines: lines}) do
-    lines == [] or Enum.all?(lines, fn line -> String.trim(line) == "" end)
+    lines == [] or Enum.all?(lines, &empty_line?/1)
+  end
+
+  # Private helper functions for Paragraph
+
+  defp valid_line?(line) when is_binary(line), do: true
+  defp valid_line?(%Org.FormattedText{}), do: true
+  defp valid_line?(_), do: false
+
+  defp line_to_text(%Org.FormattedText{} = formatted_text) do
+    Org.FormattedText.to_plain_text(formatted_text)
+  end
+
+  defp line_to_text(line) when is_binary(line), do: line
+
+  defp empty_line?(%Org.FormattedText{} = formatted_text) do
+    Org.FormattedText.empty?(formatted_text)
+  end
+
+  defp empty_line?(line) when is_binary(line) do
+    String.trim(line) == ""
+  end
+
+  defp count_formatted_lines(lines) do
+    Enum.count(lines, &match?(%Org.FormattedText{}, &1))
   end
 end
 
@@ -269,5 +296,78 @@ defimpl Org.Content, for: Org.List do
       |> Enum.map(fn item -> calculate_max_depth(item.children, current_depth + 1) end)
       |> Enum.max(fn -> current_depth end)
     end
+  end
+end
+
+defimpl Org.Content, for: Org.FormattedText do
+  def content_type(_), do: :formatted_text
+
+  def reverse_recursive(formatted_text) do
+    %{formatted_text | spans: Enum.reverse(formatted_text.spans)}
+  end
+
+  def can_merge?(_formatted_text, %Org.FormattedText{}) do
+    # FormattedText can potentially be merged
+    true
+  end
+
+  def can_merge?(_, _), do: false
+
+  def merge(%Org.FormattedText{spans: spans1}, %Org.FormattedText{spans: spans2}) do
+    # Merge formatted text by combining spans
+    %Org.FormattedText{spans: spans1 ++ spans2}
+  end
+
+  def validate(%Org.FormattedText{spans: spans}) when is_list(spans) do
+    valid_spans = Enum.all?(spans, &valid_span?/1)
+
+    if valid_spans do
+      {:ok, %Org.FormattedText{spans: spans}}
+    else
+      {:error, "Invalid formatted text span structure"}
+    end
+  end
+
+  def validate(_), do: {:error, "Invalid formatted text structure"}
+
+  def to_text(%Org.FormattedText{} = formatted_text) do
+    Org.FormattedText.to_plain_text(formatted_text)
+  end
+
+  def metadata(%Org.FormattedText{spans: spans}) do
+    plain_text = Org.FormattedText.to_plain_text(%Org.FormattedText{spans: spans})
+    format_counts = count_formats(spans)
+
+    %{
+      span_count: length(spans),
+      character_count: String.length(plain_text),
+      word_count: plain_text |> String.split() |> length(),
+      formats: format_counts
+    }
+  end
+
+  def empty?(%Org.FormattedText{} = formatted_text) do
+    Org.FormattedText.empty?(formatted_text)
+  end
+
+  # Private helper functions
+
+  defp valid_span?(%Org.FormattedText.Span{format: format, content: content})
+       when format in [:bold, :italic, :underline, :code, :verbatim, :strikethrough] and is_binary(content) do
+    true
+  end
+
+  defp valid_span?(text) when is_binary(text), do: true
+  defp valid_span?(_), do: false
+
+  defp count_formats(spans) do
+    spans
+    |> Enum.reduce(%{}, fn
+      %Org.FormattedText.Span{format: format}, acc ->
+        Map.update(acc, format, 1, &(&1 + 1))
+
+      _, acc ->
+        acc
+    end)
   end
 end

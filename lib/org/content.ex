@@ -140,14 +140,14 @@ defmodule Org.ContentBuilder do
 
       _ ->
         # After empty line or different content - create new paragraph
-        new_para = Org.Paragraph.new([line])
+        new_para = Org.Paragraph.new_formatted([line])
         {:handled, [new_para | [para | rest]], :paragraph}
     end
   end
 
   defp handle_text_line(content_list, line, _context) do
     # Create new paragraph
-    new_para = Org.Paragraph.new([line])
+    new_para = Org.Paragraph.new_formatted([line])
     {:handled, [new_para | content_list], :paragraph}
   end
 

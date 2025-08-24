@@ -30,10 +30,10 @@ You can see an example in [examples directory](./example)
 - [x] Code Blocks
 - [x] Comments
 - [x] Lists (ordered and unordered, with nesting)
+- [x] Text Formatting
 - [ ] Custom TODO keywords
 - [ ] Tags
 - [ ] Links
-- [ ] Text Formatting
 - [ ] Metadata and Properties
 - [ ] Export Formats
 - [ ] Streaming of files
