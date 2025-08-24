@@ -55,7 +55,7 @@ defmodule Org.Lexer do
   @begin_src_re ~r/^#\+BEGIN_SRC(?:\s+([^\s]*)\s?(.*)|)$/
   @end_src_re ~r/^#\+END_SRC$/
   @comment_re ~r/^#(.+)$/
-  @section_title_re ~r/^(\*+)\s+(?:(TODO|DONE)\s+)?(?:\[#([ABC])\]\s+)?(.+)$/
+  @section_title_re ~r/^(\*+)(?:\s+(?:(TODO|DONE)\s+)?(?:\[#([ABC])\]\s+)?(.*))?$/
   @empty_line_re ~r/^\s*$/
   @table_row_re ~r/^\s*(?:\|[^|]*)+\|\s*$/
   @unordered_list_re ~r/^(\s*)[-+]\s+(.+)$/
@@ -63,42 +63,14 @@ defmodule Org.Lexer do
 
   defp lex_line(line, %Org.Lexer{mode: :normal} = lexer) do
     cond do
-      match = Regex.run(@begin_src_re, line) ->
-        [_, lang, details] = match
-        append_token(lexer, {:begin_src, lang, details}) |> set_mode(:raw)
-
-      match = Regex.run(@comment_re, line) ->
-        [_, text] = match
-        append_token(lexer, {:comment, text})
-
-      match = Regex.run(@section_title_re, line) ->
-        parse_section_title_match(lexer, match)
-
-      Regex.run(@empty_line_re, line) ->
-        append_token(lexer, {:empty_line})
-
-      Regex.run(@table_row_re, line) ->
-        cells =
-          ~r/\|(?<cell>[^|]+)/
-          |> Regex.scan(line, capture: :all_names)
-          |> List.flatten()
-          |> Enum.map(&String.trim/1)
-
-        append_token(lexer, {:table_row, cells})
-
-      match = Regex.run(@unordered_list_re, line) ->
-        [_, indent_str, content] = match
-        indent = String.length(indent_str)
-        append_token(lexer, {:list_item, indent, false, nil, content})
-
-      match = Regex.run(@ordered_list_re, line) ->
-        [_, indent_str, number_str, content] = match
-        indent = String.length(indent_str)
-        number = String.to_integer(number_str)
-        append_token(lexer, {:list_item, indent, true, number, content})
-
-      true ->
-        append_token(lexer, {:text, line})
+      match = Regex.run(@begin_src_re, line) -> handle_begin_src(lexer, match)
+      match = Regex.run(@comment_re, line) -> handle_comment(lexer, match)
+      match = Regex.run(@section_title_re, line) -> parse_section_title_match(lexer, match)
+      Regex.run(@empty_line_re, line) -> append_token(lexer, {:empty_line})
+      Regex.run(@table_row_re, line) -> handle_table_row(lexer, line)
+      match = Regex.run(@unordered_list_re, line) -> handle_unordered_list(lexer, match)
+      match = Regex.run(@ordered_list_re, line) -> handle_ordered_list(lexer, match)
+      true -> append_token(lexer, {:text, line})
     end
   end
 
@@ -118,19 +90,61 @@ defmodule Org.Lexer do
     %Org.Lexer{lexer | mode: mode}
   end
 
+  defp handle_begin_src(lexer, match) do
+    {lang, details} =
+      case match do
+        [_, lang, details] -> {lang, details}
+        [_] -> {"", ""}
+        _ -> {"", ""}
+      end
+
+    append_token(lexer, {:begin_src, lang, details}) |> set_mode(:raw)
+  end
+
+  defp handle_comment(lexer, [_, text]) do
+    append_token(lexer, {:comment, text})
+  end
+
+  defp handle_table_row(lexer, line) do
+    cells =
+      ~r/\|(?<cell>[^|]+)/
+      |> Regex.scan(line, capture: :all_names)
+      |> List.flatten()
+      |> Enum.map(&String.trim/1)
+
+    append_token(lexer, {:table_row, cells})
+  end
+
+  defp handle_unordered_list(lexer, [_, indent_str, content]) do
+    indent = String.length(indent_str)
+    append_token(lexer, {:list_item, indent, false, nil, content})
+  end
+
+  defp handle_ordered_list(lexer, [_, indent_str, number_str, content]) do
+    indent = String.length(indent_str)
+    number = String.to_integer(number_str)
+    append_token(lexer, {:list_item, indent, true, number, content})
+  end
+
   defp parse_section_title_match(lexer, match) do
     case match do
-      [_, nesting, "", "", title] ->
-        append_token(lexer, {:section_title, String.length(nesting), title, nil, nil})
+      # Just asterisks, no content
+      [_, nesting] ->
+        append_token(lexer, {:section_title, String.length(nesting), "", nil, nil})
 
-      [_, nesting, todo_keyword, "", title] ->
-        append_token(lexer, {:section_title, String.length(nesting), title, todo_keyword, nil})
-
-      [_, nesting, "", priority, title] ->
-        append_token(lexer, {:section_title, String.length(nesting), title, nil, priority})
-
+      # Full match with all components
       [_, nesting, todo_keyword, priority, title] ->
+        title = if title, do: String.trim(title), else: ""
+        todo_keyword = if todo_keyword == "", do: nil, else: todo_keyword
+        priority = if priority == "", do: nil, else: priority
         append_token(lexer, {:section_title, String.length(nesting), title, todo_keyword, priority})
+
+      # Fallback for any other pattern
+      _ ->
+        # Extract at least the nesting level and treat rest as title
+        [_, nesting | rest] = match
+        title = rest |> Enum.filter(& &1) |> Enum.join(" ") |> String.trim()
+        append_token(lexer, {:section_title, String.length(nesting), title, nil, nil})
     end
   end
 end
