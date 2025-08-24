@@ -63,6 +63,19 @@
             color: #7f8c8d; 
             opacity: 0.7;
         }
+        a {
+            color: #3498db;
+            text-decoration: none;
+            border-bottom: 1px solid transparent;
+            transition: border-bottom-color 0.2s ease;
+        }
+        a:hover {
+            color: #2980b9;
+            border-bottom-color: #2980b9;
+        }
+        a:visited {
+            color: #8e44ad;
+        }
         ul, ol { margin: 20px 0; }
         li { margin: 5px 0; }
         ul ul, ol ol, ul ol, ol ul { margin: 10px 0; }
@@ -79,11 +92,11 @@
 <h2><span class="todo">TODO</span> <span class="priority-A">[#A]</span> Dependencies</h2>
 <p>Install required dependencies (<strong>high priority</strong>):</p>
 <ul>
-<li>Database setup (<em>PostgreSQL</em> recommended)</li>
+<li>Database setup (<a href="https://postgresql.org">PostgreSQL</a> recommended)</li>
 
-<li>Web framework (<u>Phoenix</u> or <u>Rails</u>)</li>
+<li>Web framework (<a href="https://phoenixframework.org">_Phoenix_</a> or <a href="https://rubyonrails.org">_Rails_</a>)</li>
 
-<li>Testing tools (<code>pytest</code> or <code class="verbatim">ExUnit</code>)</li>
+<li>Testing tools (<code>pytest</code> or <a href="https://hexdocs.pm/ex_unit/ExUnit.html">~ExUnit~</a>)</li>
 
 </ul>
 
@@ -91,7 +104,7 @@
 
 
 <h1><span class="done">DONE</span> Documentation</h1>
-<p>Write comprehensive documentation for the project. <del>Old approach was insufficient</del> but now we have <strong>complete</strong> <em>API documentation</em> with <u>proper examples</u> and <code>code samples</code>.</p>
+<p>Write comprehensive documentation for the project. <del>Old approach was insufficient</del> but now we have <strong>complete</strong> <em>API documentation</em> with <u>proper examples</u> and <code>code samples</code>. Visit <a href="https://docs.example.com">https://docs.example.com</a> for the latest docs.</p>
 <table>
 <tr><td>Feature</td><td>Status</td><td>Priority</td></tr>
 
@@ -109,7 +122,7 @@
 end</code></pre>
 
 <h2>Implementation Notes</h2>
-<p>The function should handle edge cases like <strong>empty names</strong>, <em>nil values</em>, and <u>special characters</u>. Use <code>String.trim()</code> to clean input and <code class="verbatim">Logger.warn()</code> for debugging.</p>
+<p>The function should handle edge cases like <strong>empty names</strong>, <em>nil values</em>, and <u>special characters</u>. Use <code>String.trim()</code> to clean input and <code class="verbatim">Logger.warn()</code> for debugging. See <a href="https://hexdocs.pm/elixir/String.html">String documentation</a> for more details.</p>
 
 
 
@@ -118,17 +131,17 @@ end</code></pre>
 <h2>Development Tasks</h2>
 <ul>
 <li><strong>Mobile app development</strong> (<em>high impact</em>)<ul>
-<li><u>iOS implementation</u> using <code>Swift</code></li>
+<li><u>iOS implementation</u> using <a href="https://swift.org">=Swift=</a></li>
 
-<li><u>Android implementation</u> using <code class="verbatim">Kotlin</code></li>
+<li><u>Android implementation</u> using <a href="https://kotlinlang.org">~Kotlin~</a></li>
 
 </ul>
 </li>
 
 <li><strong>API improvements</strong> (<del>legacy code cleanup</del>)<ul>
-<li><em>Authentication upgrade</em> to <code>OAuth2</code></li>
+<li><em>Authentication upgrade</em> to <a href="https://oauth.net/2/">=OAuth2=</a></li>
 
-<li><u>Rate limiting</u> with <code class="verbatim">Redis</code> backend</li>
+<li><u>Rate limiting</u> with <a href="https://redis.io">~Redis~</a> backend</li>
 
 </ul>
 </li>
@@ -155,6 +168,21 @@ end</code></pre>
 
 </ol>
 
+
+
+
+<h1>Resources</h1>
+<p>Useful links for development:</p>
+<ul>
+<li>Official Elixir website: <a href="https://elixir-lang.org">https://elixir-lang.org</a></li>
+
+<li>Hexdocs for packages: <a href="https://hexdocs.pm">https://hexdocs.pm</a></li>
+
+<li>Community discussions at <a href="https://elixirforum.com">Elixir Forum</a></li>
+
+<li>Internal project notes: <a href="#section-name">#section-name</a></li>
+
+</ul>
 
 
 

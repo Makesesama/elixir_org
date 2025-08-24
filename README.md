@@ -31,9 +31,9 @@ You can see an example in [examples directory](./example)
 - [x] Comments
 - [x] Lists (ordered and unordered, with nesting)
 - [x] Text Formatting
+- [x] Links
 - [ ] Custom TODO keywords
 - [ ] Tags
-- [ ] Links
 - [ ] Metadata and Properties
 - [ ] Export Formats
 - [ ] Streaming of files

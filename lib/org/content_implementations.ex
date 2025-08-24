@@ -357,6 +357,11 @@ defimpl Org.Content, for: Org.FormattedText do
     true
   end
 
+  defp valid_span?(%Org.FormattedText.Link{url: url, description: description})
+       when is_binary(url) and (is_nil(description) or is_binary(description)) do
+    true
+  end
+
   defp valid_span?(text) when is_binary(text), do: true
   defp valid_span?(_), do: false
 
@@ -365,6 +370,9 @@ defimpl Org.Content, for: Org.FormattedText do
     |> Enum.reduce(%{}, fn
       %Org.FormattedText.Span{format: format}, acc ->
         Map.update(acc, format, 1, &(&1 + 1))
+
+      %Org.FormattedText.Link{}, acc ->
+        Map.update(acc, :link, 1, &(&1 + 1))
 
       _, acc ->
         acc

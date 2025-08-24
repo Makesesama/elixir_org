@@ -18,7 +18,7 @@ defmodule Org.FormattedText do
   defstruct spans: []
 
   @type format_type :: :bold | :italic | :underline | :code | :verbatim | :strikethrough
-  @type span :: String.t() | %__MODULE__.Span{}
+  @type span :: String.t() | %__MODULE__.Span{} | %__MODULE__.Link{}
   @type t :: %__MODULE__{spans: list(span)}
 
   defmodule Span do
@@ -31,6 +31,19 @@ defmodule Org.FormattedText do
     @type t :: %__MODULE__{
             format: Org.FormattedText.format_type(),
             content: String.t()
+          }
+  end
+
+  defmodule Link do
+    @moduledoc """
+    Represents a link with URL and optional description text.
+    """
+
+    defstruct [:url, :description]
+
+    @type t :: %__MODULE__{
+            url: String.t(),
+            description: String.t() | nil
           }
   end
 
@@ -48,6 +61,14 @@ defmodule Org.FormattedText do
   @spec span(format_type(), String.t()) :: Span.t()
   def span(format, content) do
     %Span{format: format, content: content}
+  end
+
+  @doc """
+  Creates a new link.
+  """
+  @spec link(String.t(), String.t() | nil) :: Link.t()
+  def link(url, description \\ nil) do
+    %Link{url: url, description: description}
   end
 
   @doc """
@@ -86,6 +107,8 @@ defmodule Org.FormattedText do
   def to_plain_text(%__MODULE__{spans: spans}) do
     Enum.map_join(spans, "", fn
       %Span{content: content} -> content
+      %Link{description: nil, url: url} -> url
+      %Link{description: description} -> description
       text when is_binary(text) -> text
     end)
   end
@@ -98,6 +121,8 @@ defmodule Org.FormattedText do
     spans == [] or
       Enum.all?(spans, fn
         %Span{content: content} -> String.trim(content) == ""
+        %Link{description: nil, url: url} -> String.trim(url) == ""
+        %Link{description: description} -> String.trim(description) == ""
         text when is_binary(text) -> String.trim(text) == ""
       end)
   end
@@ -114,27 +139,58 @@ defmodule Org.FormattedText do
     strikethrough: ~r/\+([^\+]+)\+/
   }
 
+  # Link patterns (processed separately due to different structure)
+  @link_patterns %{
+    # [[URL][description]] - link with description
+    described_link: ~r/\[\[([^\[\]]+)\]\[([^\[\]]+)\]\]/,
+    # [[URL]] - simple link
+    simple_link: ~r/\[\[([^\[\]]+)\]\]/,
+    # Bare URLs (http/https)
+    bare_url: ~r/(https?:\/\/[^\s\[\]]+)/
+  }
+
   # Parse spans recursively
   defp parse_spans("", acc), do: acc
 
   defp parse_spans(text, acc) do
-    case find_next_format(text) do
+    case find_next_format_or_link(text) do
       nil ->
         # No more formatting found, add remaining text
         if text != "", do: acc ++ [text], else: acc
 
-      {format, content, before, after_text} ->
+      {:format, format, content, before, after_text} ->
         # Add text before the format (if any)
         acc = if before != "", do: acc ++ [before], else: acc
         # Add the formatted span
         acc = acc ++ [span(format, content)]
         # Continue parsing the remaining text
         parse_spans(after_text, acc)
+
+      {:link, url, description, before, after_text} ->
+        # Add text before the link (if any)
+        acc = if before != "", do: acc ++ [before], else: acc
+        # Add the link
+        acc = acc ++ [link(url, description)]
+        # Continue parsing the remaining text
+        parse_spans(after_text, acc)
     end
   end
 
-  # Find the next formatting pattern in the text
-  defp find_next_format(text) do
+  # Find the next formatting pattern or link in the text
+  defp find_next_format_or_link(text) do
+    format_matches = find_format_matches(text)
+    link_matches = find_link_matches(text)
+
+    # Combine and find the earliest match
+    (format_matches ++ link_matches)
+    |> Enum.min_by(fn {start, _} -> start end, fn -> nil end)
+    |> case do
+      nil -> nil
+      {_start, match_data} -> match_data
+    end
+  end
+
+  defp find_format_matches(text) do
     @formatting_patterns
     |> Enum.map(fn {format, regex} ->
       case Regex.run(regex, text, return: :index) do
@@ -144,17 +200,50 @@ defmodule Org.FormattedText do
           # +2 for the delimiters
           after_pos = start + (content_length + 2)
           after_text = String.slice(text, after_pos..-1//1)
-          {start, format, content, before, after_text}
+          {start, {:format, format, content, before, after_text}}
 
         nil ->
           nil
       end
     end)
     |> Enum.reject(&is_nil/1)
-    |> Enum.min_by(fn {start, _, _, _, _} -> start end, fn -> nil end)
-    |> case do
-      nil -> nil
-      {_start, format, content, before, after_text} -> {format, content, before, after_text}
+  end
+
+  defp find_link_matches(text) do
+    @link_patterns
+    |> Enum.map(&process_link_match(&1, text))
+    |> Enum.reject(&is_nil/1)
+  end
+
+  defp process_link_match({link_type, regex}, text) do
+    case {link_type, Regex.run(regex, text, return: :index)} do
+      {_, nil} ->
+        nil
+
+      {:described_link, [{start, total_length}, {url_start, url_length}, {desc_start, desc_length}]} ->
+        before = String.slice(text, 0, start)
+        url = String.slice(text, url_start, url_length)
+        description = String.slice(text, desc_start, desc_length)
+        after_pos = start + total_length
+        after_text = String.slice(text, after_pos..-1//1)
+        {start, {:link, url, description, before, after_text}}
+
+      {:simple_link, [{start, total_length}, {url_start, url_length}]} ->
+        before = String.slice(text, 0, start)
+        url = String.slice(text, url_start, url_length)
+        after_pos = start + total_length
+        after_text = String.slice(text, after_pos..-1//1)
+        {start, {:link, url, nil, before, after_text}}
+
+      {:bare_url, [{start, total_length}, {url_start, url_length}]} ->
+        before = String.slice(text, 0, start)
+        url = String.slice(text, url_start, url_length)
+        after_pos = start + total_length
+        after_text = String.slice(text, after_pos..-1//1)
+        {start, {:link, url, nil, before, after_text}}
+
+      _ ->
+        nil
     end
   end
 
@@ -168,6 +257,14 @@ defmodule Org.FormattedText do
       :verbatim -> "~#{content}~"
       :strikethrough -> "+#{content}+"
     end
+  end
+
+  defp span_to_string(%Link{url: url, description: nil}) do
+    "[[#{url}]]"
+  end
+
+  defp span_to_string(%Link{url: url, description: description}) do
+    "[[#{url}][#{description}]]"
   end
 
   defp span_to_string(text) when is_binary(text), do: text

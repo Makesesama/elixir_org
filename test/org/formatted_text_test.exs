@@ -308,4 +308,142 @@ defmodule Org.FormattedTextTest do
       assert result == "Plain line\nFormatted line"
     end
   end
+
+  describe "Link parsing" do
+    test "parses simple links" do
+      result = FormattedText.parse("Visit [[https://example.com]] for more info")
+
+      expected = %FormattedText{
+        spans: [
+          "Visit ",
+          %FormattedText.Link{url: "https://example.com", description: nil},
+          " for more info"
+        ]
+      }
+
+      assert result == expected
+    end
+
+    test "parses links with descriptions" do
+      result = FormattedText.parse("Check out [[https://elixir-lang.org][Elixir]] programming")
+
+      expected = %FormattedText{
+        spans: [
+          "Check out ",
+          %FormattedText.Link{url: "https://elixir-lang.org", description: "Elixir"},
+          " programming"
+        ]
+      }
+
+      assert result == expected
+    end
+
+    test "parses bare URLs" do
+      result = FormattedText.parse("Visit https://example.com for details")
+
+      expected = %FormattedText{
+        spans: [
+          "Visit ",
+          %FormattedText.Link{url: "https://example.com", description: nil},
+          " for details"
+        ]
+      }
+
+      assert result == expected
+    end
+
+    test "parses multiple links in one line" do
+      result = FormattedText.parse("Go to [[https://elixir.org]] or [[https://hex.pm][Hex]] for packages")
+
+      expected = %FormattedText{
+        spans: [
+          "Go to ",
+          %FormattedText.Link{url: "https://elixir.org", description: nil},
+          " or ",
+          %FormattedText.Link{url: "https://hex.pm", description: "Hex"},
+          " for packages"
+        ]
+      }
+
+      assert result == expected
+    end
+
+    test "parses links mixed with formatting" do
+      result = FormattedText.parse("*Important*: visit [[https://docs.elixir-lang.org][Documentation]] for /help/")
+
+      expected = %FormattedText{
+        spans: [
+          %FormattedText.Span{format: :bold, content: "Important"},
+          ": visit ",
+          %FormattedText.Link{url: "https://docs.elixir-lang.org", description: "Documentation"},
+          " for ",
+          %FormattedText.Span{format: :italic, content: "help"}
+        ]
+      }
+
+      assert result == expected
+    end
+
+    test "handles internal links" do
+      result = FormattedText.parse("See [[#section-name]] for details")
+
+      expected = %FormattedText{
+        spans: [
+          "See ",
+          %FormattedText.Link{url: "#section-name", description: nil},
+          " for details"
+        ]
+      }
+
+      assert result == expected
+    end
+  end
+
+  describe "Link conversion" do
+    test "converts links back to org string" do
+      formatted = %FormattedText{
+        spans: [
+          "Visit ",
+          %FormattedText.Link{url: "https://example.com", description: nil},
+          " and ",
+          %FormattedText.Link{url: "https://elixir-lang.org", description: "Elixir"}
+        ]
+      }
+
+      result = FormattedText.to_org_string(formatted)
+      assert result == "Visit [[https://example.com]] and [[https://elixir-lang.org][Elixir]]"
+    end
+
+    test "converts links to plain text" do
+      formatted = %FormattedText{
+        spans: [
+          "Visit ",
+          %FormattedText.Link{url: "https://example.com", description: nil},
+          " and ",
+          %FormattedText.Link{url: "https://elixir-lang.org", description: "Elixir"}
+        ]
+      }
+
+      result = FormattedText.to_plain_text(formatted)
+      assert result == "Visit https://example.com and Elixir"
+    end
+
+    test "link metadata counting" do
+      formatted = %FormattedText{
+        spans: [
+          %FormattedText.Span{format: :bold, content: "Bold"},
+          " with ",
+          %FormattedText.Link{url: "https://example.com", description: "link"},
+          " and another ",
+          %FormattedText.Link{url: "https://other.com", description: nil}
+        ]
+      }
+
+      metadata = Org.Content.metadata(formatted)
+
+      assert metadata.span_count == 5
+      assert metadata.formats.bold == 1
+      assert metadata.formats.link == 2
+    end
+  end
 end

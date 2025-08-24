@@ -97,6 +97,19 @@ defmodule OrgToHtml do
                 color: #7f8c8d; 
                 opacity: 0.7;
             }
+            a {
+                color: #3498db;
+                text-decoration: none;
+                border-bottom: 1px solid transparent;
+                transition: border-bottom-color 0.2s ease;
+            }
+            a:hover {
+                color: #2980b9;
+                border-bottom-color: #2980b9;
+            }
+            a:visited {
+                color: #8e44ad;
+            }
             ul, ol { margin: 20px 0; }
             li { margin: 5px 0; }
             ul ul, ol ol, ul ol, ol ul { margin: 10px 0; }
@@ -266,6 +279,17 @@ defmodule OrgToHtml do
       :verbatim -> "<code class=\"verbatim\">#{escaped_content}</code>"
       :strikethrough -> "<del>#{escaped_content}</del>"
     end
+  end
+
+  defp span_to_html(%Org.FormattedText.Link{url: url, description: nil}) do
+    escaped_url = escape_html(url)
+    "<a href=\"#{escaped_url}\">#{escaped_url}</a>"
+  end
+
+  defp span_to_html(%Org.FormattedText.Link{url: url, description: description}) do
+    escaped_url = escape_html(url)
+    escaped_description = escape_html(description)
+    "<a href=\"#{escaped_url}\">#{escaped_description}</a>"
   end
 
   defp span_to_html(text) when is_binary(text) do
