@@ -46,7 +46,7 @@
           }
         );
 
-      # treefmtEval = forAllSystems ({ pkgs }: treefmt-nix.lib.evalModule pkgs ./nix/treefmt.nix);
+      treefmtEval = forAllSystems ({ pkgs }: treefmt-nix.lib.evalModule pkgs ./nix/treefmt.nix);
     in
     {
       # packages = forAllSystems (
@@ -55,24 +55,24 @@
       #     default = pkgs.callPackage ./nix/package.nix { };
       #   }
       # );
-      # checks = forAllSystems (
-      #   { pkgs }:
-      #   {
-      #     pre-commit-check = inputs.pre-commit-hooks.lib.${pkgs.system}.run {
-      #       src = ./.;
-      #       hooks = {
-      #         credo.enable = true;
-      #         credo.package = pkgs.elixir;
-      #         # mix-test.enable = true;
-      #         # mix-test.package = pkgs.elixir;
-      #         treefmt = {
-      #           enable = true;
-      #           package = treefmtEval.${pkgs.system}.config.build.wrapper;
-      #         };
-      #       };
-      #     };
-      #   }
-      # );
+      checks = forAllSystems (
+        { pkgs }:
+        {
+          pre-commit-check = inputs.pre-commit-hooks.lib.${pkgs.system}.run {
+            src = ./.;
+            hooks = {
+              credo.enable = true;
+              credo.package = pkgs.elixir;
+              # mix-test.enable = true;
+              # mix-test.package = pkgs.elixir;
+              treefmt = {
+                enable = true;
+                package = treefmtEval.${pkgs.system}.config.build.wrapper;
+              };
+            };
+          };
+        }
+      );
       devShells = forAllSystems (
         { pkgs }:
         {
@@ -88,9 +88,10 @@
                     Foundation
                   ]
                 );
+              pre-commit-shell = self.checks.${pkgs.system}.pre-commit-check.shellHook;
             in
             pkgs.mkShell {
-              # buildInputs = self.checks.${pkgs.system}.pre-commit-check.enabledPackages;
+              buildInputs = self.checks.${pkgs.system}.pre-commit-check.enabledPackages;
               # inputsFrom = [ self.packages.${pkgs.system}.default ];
               packages = [
                 pkgs.elixir
@@ -98,6 +99,7 @@
               ]
               ++ opts;
               shellHook = ''
+                ${pre-commit-shell}
                 # Set up `mix` to save dependencies to the local directory
                 mkdir -p .nix-mix
                 mkdir -p .nix-hex
@@ -113,7 +115,7 @@
             };
         }
       );
-      # formatter = forAllSystems ({ pkgs }: treefmtEval.${pkgs.system}.config.build.wrapper);
+      formatter = forAllSystems ({ pkgs }: treefmtEval.${pkgs.system}.config.build.wrapper);
     };
 
 }

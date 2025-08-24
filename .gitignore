@@ -38,3 +38,5 @@ org-*.tar
 .nix-mix
 
 .nix-hex
+
+/.pre-commit-config.yaml

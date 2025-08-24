@@ -148,7 +148,7 @@ defmodule Org.ListTest do
       assert Enum.at(Enum.at(nested, 0).children, 0).content == "Nested 1"
       assert Enum.at(Enum.at(nested, 0).children, 1).content == "Nested 2"
       assert Enum.at(nested, 1).content == "Another top"
-      assert length(Enum.at(nested, 1).children) == 0
+      assert Enum.empty?(Enum.at(nested, 1).children)
     end
   end
 

@@ -11,13 +11,13 @@ defmodule OrgToHtml do
   def convert_file(input_path, output_path) do
     # Load and parse the org document
     doc = Org.load_file(input_path)
-    
+
     # Convert to HTML
     html = document_to_html(doc)
-    
+
     # Write to output file
     File.write!(output_path, html)
-    
+
     IO.puts("✓ Converted #{input_path} to #{output_path}")
   end
 
@@ -58,9 +58,7 @@ defmodule OrgToHtml do
   end
 
   defp sections_to_html(sections, level) do
-    sections
-    |> Enum.map(&section_to_html(&1, level))
-    |> Enum.join("\n")
+    Enum.map_join(sections, "\n", &section_to_html(&1, level))
   end
 
   defp section_to_html(section, level) do
@@ -77,16 +75,18 @@ defmodule OrgToHtml do
   end
 
   defp section_title_to_html(section) do
-    todo_html = case section.todo_keyword do
-      "TODO" -> "<span class=\"todo\">TODO</span> "
-      "DONE" -> "<span class=\"done\">DONE</span> "
-      _ -> ""
-    end
+    todo_html =
+      case section.todo_keyword do
+        "TODO" -> "<span class=\"todo\">TODO</span> "
+        "DONE" -> "<span class=\"done\">DONE</span> "
+        _ -> ""
+      end
 
-    priority_html = case section.priority do
-      p when p in ["A", "B", "C"] -> "<span class=\"priority-#{p}\">[##{p}]</span> "
-      _ -> ""
-    end
+    priority_html =
+      case section.priority do
+        p when p in ["A", "B", "C"] -> "<span class=\"priority-#{p}\">[##{p}]</span> "
+        _ -> ""
+      end
 
     "#{todo_html}#{priority_html}#{section.title}"
   end
@@ -94,8 +94,7 @@ defmodule OrgToHtml do
   defp contents_to_html(section_or_doc) do
     section_or_doc
     |> Org.contents()
-    |> Enum.map(&content_to_html/1)
-    |> Enum.join("\n")
+    |> Enum.map_join("\n", &content_to_html/1)
   end
 
   defp content_to_html(%Org.Paragraph{lines: lines}) do
@@ -105,6 +104,7 @@ defmodule OrgToHtml do
 
   defp content_to_html(%Org.Table{rows: rows}) do
     html_rows = Enum.map(rows, &table_row_to_html/1)
+
     """
     <table>
     #{Enum.join(html_rows, "\n")}
@@ -114,6 +114,7 @@ defmodule OrgToHtml do
 
   defp content_to_html(%Org.CodeBlock{lang: lang, lines: lines}) do
     code_content = Enum.join(lines, "\n")
+
     """
     <pre><code class="language-#{lang}">#{escape_html(code_content)}</code></pre>
     """
@@ -122,13 +123,14 @@ defmodule OrgToHtml do
   defp content_to_html(%Org.List{items: items}) do
     # Build nested structure and convert to HTML
     nested_items = Org.List.build_nested(items)
-    list_html = Enum.map(nested_items, &list_item_to_html/1) |> Enum.join("\n")
-    
+    list_html = Enum.map_join(nested_items, "\n", &list_item_to_html/1)
+
     # Determine if this is an ordered or unordered list based on first item
-    tag = case List.first(nested_items) do
-      %{ordered: true} -> "ol"
-      _ -> "ul"
-    end
+    tag =
+      case List.first(nested_items) do
+        %{ordered: true} -> "ol"
+        _ -> "ul"
+      end
 
     """
     <#{tag}>
@@ -140,9 +142,11 @@ defmodule OrgToHtml do
   defp content_to_html(_), do: ""
 
   defp table_row_to_html(%Org.Table.Row{cells: cells}) do
-    cell_html = Enum.map(cells, fn cell -> 
-      "<td>#{String.trim(cell)}</td>" 
-    end)
+    cell_html =
+      Enum.map(cells, fn cell ->
+        "<td>#{String.trim(cell)}</td>"
+      end)
+
     "<tr>#{Enum.join(cell_html, "")}</tr>"
   end
 
@@ -152,21 +156,27 @@ defmodule OrgToHtml do
   end
 
   defp list_item_to_html(%Org.List.Item{content: content, children: children}) do
-    children_html = case children do
-      [] -> ""
-      _ -> 
-        # Determine tag based on first child
-        child_tag = case List.first(children) do
-          %{ordered: true} -> "ol"
-          _ -> "ul"
-        end
-        child_items = Enum.map(children, &list_item_to_html/1) |> Enum.join("\n")
-        """
-        <#{child_tag}>
-        #{child_items}
-        </#{child_tag}>
-        """
-    end
+    children_html =
+      case children do
+        [] ->
+          ""
+
+        _ ->
+          # Determine tag based on first child
+          child_tag =
+            case List.first(children) do
+              %{ordered: true} -> "ol"
+              _ -> "ul"
+            end
+
+          child_items = Enum.map_join(children, "\n", &list_item_to_html/1)
+
+          """
+          <#{child_tag}>
+          #{child_items}
+          </#{child_tag}>
+          """
+      end
 
     """
     <li>#{escape_html(content)}#{children_html}</li>
@@ -195,6 +205,7 @@ case System.argv() do
 
   [input_file] ->
     output_file = Path.rootname(input_file) <> ".html"
+
     if File.exists?(input_file) do
       OrgToHtml.convert_file(input_file, output_file)
     else
@@ -205,10 +216,11 @@ case System.argv() do
   _ ->
     IO.puts("""
     Usage: elixir converter.exs <input.org> [output.html]
-    
+
     Examples:
       elixir converter.exs sample.org
       elixir converter.exs sample.org output.html
     """)
+
     System.halt(1)
 end

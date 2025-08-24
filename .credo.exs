@@ -13,7 +13,7 @@
       plugins: [],
       requires: [],
       strict: false,
-      parse_timeout: 60000,
+      parse_timeout: 60_000,
       color: true,
       checks: [
         ## Consistency Checks
@@ -25,8 +25,7 @@
         {Credo.Check.Consistency.TabsOrSpaces, []},
 
         ## Design Checks
-        {Credo.Check.Design.AliasUsage,
-         [priority: :low, if_nested_deeper_than: 2, if_called_more_often_than: 0]},
+        {Credo.Check.Design.AliasUsage, [priority: :low, if_nested_deeper_than: 2, if_called_more_often_than: 0]},
         {Credo.Check.Design.TagTODO, [exit_status: 2]},
         {Credo.Check.Design.TagFIXME, []},
 
