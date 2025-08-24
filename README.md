@@ -19,3 +19,18 @@ def deps do
 end
 ```
 
+## Roadmap
+- [x] Document Structure
+- [x] TODO keywords
+- [x] Paragraphs
+- [x] Tables
+- [x] Code Blocks
+- [x] Comments
+- [ ] Custom TODO keywords
+- [ ] Tags
+- [ ] Links
+- [ ] Text Formatting
+- [ ] Lists
+- [ ] Metadata and Properties
+- [ ] Export Formats
+- [ ] Streaming of files
