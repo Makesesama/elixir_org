@@ -36,6 +36,19 @@ end
 The function should handle edge cases like empty names.
 
 * Future Plans
-- [ ] Mobile app
-- [ ] API improvements  
-- [ ] Performance optimization
+
+** Development Tasks
+- Mobile app development
+  - iOS implementation
+  - Android implementation
+- API improvements
+  - Authentication upgrade
+  - Rate limiting
+- Performance optimization
+
+** Priority List
+1. Security audit
+2. User experience improvements
+   - Better navigation
+   - Faster loading times
+3. Documentation updates

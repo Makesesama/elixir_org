@@ -29,11 +29,11 @@ You can see an example in [examples directory](./example)
 - [x] Tables
 - [x] Code Blocks
 - [x] Comments
+- [x] Lists (ordered and unordered, with nesting)
 - [ ] Custom TODO keywords
 - [ ] Tags
 - [ ] Links
 - [ ] Text Formatting
-- [ ] Lists
 - [ ] Metadata and Properties
 - [ ] Export Formats
 - [ ] Streaming of files

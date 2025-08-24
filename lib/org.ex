@@ -12,6 +12,7 @@ defmodule Org do
   - Paragraphs
   - Tables
   - Code blocks
+  - Lists (ordered and unordered, with nesting support)
 
   ## TODO Keywords and Priorities
 
@@ -137,6 +138,28 @@ defmodule Org do
   @spec paragraphs(Org.Section.t() | Org.Document.t()) :: list(Org.Paragraph.t())
   def paragraphs(section_or_document) do
     for %Org.Paragraph{} = paragraph <- Org.contents(section_or_document), do: paragraph
+  end
+
+  @doc ~S"""
+  Extracts all lists from the given section or document
+
+  Example:
+      iex> doc = Org.load_string(~S{
+      ...>- First item
+      ...>- Second item
+      ...>  - Nested item
+      ...>})
+      iex> [list] = Org.lists(doc)
+      iex> length(list.items)
+      3
+      iex> Enum.at(list.items, 0).content
+      "First item"
+      iex> Enum.at(list.items, 0).ordered
+      false
+  """
+  @spec lists(Org.Section.t() | Org.Document.t()) :: list(Org.List.t())
+  def lists(section_or_document) do
+    for %Org.List{} = list <- Org.contents(section_or_document), do: list
   end
 
   @doc "Extracts all contents from given section or document"

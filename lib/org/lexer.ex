@@ -5,6 +5,7 @@ defmodule Org.Lexer do
           {:comment, String.t()}
           | {:section_title, integer, String.t(), String.t() | nil, String.t() | nil}
           | {:table_row, list(String.t())}
+          | {:list_item, non_neg_integer(), boolean(), integer() | nil, String.t()}
           | {:empty_line}
           | {:text, String.t()}
 
@@ -57,6 +58,8 @@ defmodule Org.Lexer do
   @section_title_re ~r/^(\*+)\s+(?:(TODO|DONE)\s+)?(?:\[#([ABC])\]\s+)?(.+)$/
   @empty_line_re ~r/^\s*$/
   @table_row_re ~r/^\s*(?:\|[^|]*)+\|\s*$/
+  @unordered_list_re ~r/^(\s*)[-+]\s+(.+)$/
+  @ordered_list_re ~r/^(\s*)(\d+)[\.)]\s+(.+)$/
 
   defp lex_line(line, %Org.Lexer{mode: :normal} = lexer) do
     cond do
@@ -82,6 +85,17 @@ defmodule Org.Lexer do
           |> Enum.map(&String.trim/1)
 
         append_token(lexer, {:table_row, cells})
+
+      match = Regex.run(@unordered_list_re, line) ->
+        [_, indent_str, content] = match
+        indent = String.length(indent_str)
+        append_token(lexer, {:list_item, indent, false, nil, content})
+
+      match = Regex.run(@ordered_list_re, line) ->
+        [_, indent_str, number_str, content] = match
+        indent = String.length(indent_str)
+        number = String.to_integer(number_str)
+        append_token(lexer, {:list_item, indent, true, number, content})
 
       true ->
         append_token(lexer, {:text, line})

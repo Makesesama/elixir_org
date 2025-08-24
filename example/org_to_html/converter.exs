@@ -44,6 +44,9 @@ defmodule OrgToHtml do
             th { background-color: #ecf0f1; }
             pre { background-color: #f8f9fa; padding: 15px; border-left: 4px solid #3498db; overflow-x: auto; }
             code { background-color: #f8f9fa; padding: 2px 4px; border-radius: 3px; }
+            ul, ol { margin: 20px 0; }
+            li { margin: 5px 0; }
+            ul ul, ol ol, ul ol, ol ul { margin: 10px 0; }
         </style>
     </head>
     <body>
@@ -116,6 +119,24 @@ defmodule OrgToHtml do
     """
   end
 
+  defp content_to_html(%Org.List{items: items}) do
+    # Build nested structure and convert to HTML
+    nested_items = Org.List.build_nested(items)
+    list_html = Enum.map(nested_items, &list_item_to_html/1) |> Enum.join("\n")
+    
+    # Determine if this is an ordered or unordered list based on first item
+    tag = case List.first(nested_items) do
+      %{ordered: true} -> "ol"
+      _ -> "ul"
+    end
+
+    """
+    <#{tag}>
+    #{list_html}
+    </#{tag}>
+    """
+  end
+
   defp content_to_html(_), do: ""
 
   defp table_row_to_html(%Org.Table.Row{cells: cells}) do
@@ -128,6 +149,28 @@ defmodule OrgToHtml do
   defp table_row_to_html(%Org.Table.Separator{}) do
     # Skip separators in HTML output
     ""
+  end
+
+  defp list_item_to_html(%Org.List.Item{content: content, children: children}) do
+    children_html = case children do
+      [] -> ""
+      _ -> 
+        # Determine tag based on first child
+        child_tag = case List.first(children) do
+          %{ordered: true} -> "ol"
+          _ -> "ul"
+        end
+        child_items = Enum.map(children, &list_item_to_html/1) |> Enum.join("\n")
+        """
+        <#{child_tag}>
+        #{child_items}
+        </#{child_tag}>
+        """
+    end
+
+    """
+    <li>#{escape_html(content)}#{children_html}</li>
+    """
   end
 
   defp escape_html(text) do

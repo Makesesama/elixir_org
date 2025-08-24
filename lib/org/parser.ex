@@ -3,7 +3,7 @@ defmodule Org.Parser do
 
   @type t :: %Org.Parser{
           doc: Org.Document.t(),
-          mode: :paragraph | :table | :code_block | nil
+          mode: :paragraph | :table | :code_block | :list | nil
         }
 
   @moduledoc ~S"""
@@ -101,5 +101,20 @@ defmodule Org.Parser do
 
   defp parse_token({:end_src}, %Org.Parser{mode: :code_block} = parser) do
     %Org.Parser{parser | mode: nil}
+  end
+
+  defp parse_token({:list_item, indent, ordered, number, content}, parser) do
+    item = %Org.List.Item{content: content, indent: indent, ordered: ordered, number: number}
+
+    doc =
+      if parser.mode == :list do
+        Org.Document.update_content(parser.doc, fn list ->
+          Org.List.prepend_item(list, item)
+        end)
+      else
+        Org.Document.prepend_content(parser.doc, Org.List.new([item]))
+      end
+
+    %Org.Parser{parser | doc: doc, mode: :list}
   end
 end
