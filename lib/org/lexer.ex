@@ -134,9 +134,9 @@ defmodule Org.Lexer do
 
       # Full match with all components
       [_, nesting, todo_keyword, priority, title] ->
-        title = if title, do: String.trim(title), else: ""
-        todo_keyword = if todo_keyword == "", do: nil, else: todo_keyword
-        priority = if priority == "", do: nil, else: priority
+        title = if title != nil, do: String.trim(title), else: ""
+        todo_keyword = if todo_keyword != nil and todo_keyword != "", do: todo_keyword, else: nil
+        priority = if priority != nil and priority != "", do: priority, else: nil
         append_token(lexer, {:section_title, String.length(nesting), title, todo_keyword, priority})
 
       # Fallback for any other pattern

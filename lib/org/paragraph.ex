@@ -26,9 +26,3 @@ defmodule Org.Paragraph do
     %Org.Paragraph{paragraph | lines: [line | paragraph.lines]}
   end
 end
-
-defimpl Org.Content, for: Org.Paragraph do
-  def reverse_recursive(paragraph) do
-    %Org.Paragraph{paragraph | lines: Enum.reverse(paragraph.lines)}
-  end
-end

@@ -28,9 +28,3 @@ defmodule Org.CodeBlock do
     %Org.CodeBlock{code_block | lines: [line | code_block.lines]}
   end
 end
-
-defimpl Org.Content, for: Org.CodeBlock do
-  def reverse_recursive(code_block) do
-    %Org.CodeBlock{code_block | lines: Enum.reverse(code_block.lines)}
-  end
-end

@@ -85,18 +85,3 @@ defmodule Org.List do
     end
   end
 end
-
-defimpl Org.Content, for: Org.List do
-  def reverse_recursive(list) do
-    reversed_items =
-      list.items
-      |> Enum.reverse()
-      |> Enum.map(&reverse_item/1)
-
-    %Org.List{list | items: reversed_items}
-  end
-
-  defp reverse_item(item) do
-    %{item | children: Enum.reverse(item.children) |> Enum.map(&reverse_item/1)}
-  end
-end

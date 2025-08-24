@@ -126,9 +126,3 @@ defmodule Org.Table do
     end
   end
 end
-
-defimpl Org.Content, for: Org.Table do
-  def reverse_recursive(table) do
-    %Org.Table{table | rows: Enum.reverse(table.rows)}
-  end
-end
