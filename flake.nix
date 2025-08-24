@@ -63,6 +63,7 @@
             hooks = {
               credo.enable = true;
               credo.package = pkgs.elixir;
+              dialyzer.enable = true;
               # mix-test.enable = true;
               # mix-test.package = pkgs.elixir;
               treefmt = {
