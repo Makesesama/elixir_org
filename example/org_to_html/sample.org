@@ -1,0 +1,41 @@
+#+TITLE: Project Management
+#+AUTHOR: John Doe
+
+* TODO [#A] Project Setup
+Setup the initial project structure and dependencies.
+
+** DONE [#B] Repository Creation
+Created the git repository and initial structure.
+
+** TODO [#A] Dependencies
+Install required dependencies:
+- Database setup
+- Web framework
+- Testing tools
+
+* DONE Documentation
+Write comprehensive documentation for the project.
+
+| Feature    | Status   | Priority |
+|------------+----------+----------|
+| Auth       | Planning | High     |
+| Dashboard  | Design   | Medium   |
+| Reports    | TODO     | Low      |
+
+* Code Examples
+
+Here's a simple function:
+
+#+BEGIN_SRC elixir
+def hello(name) do
+  IO.puts("Hello, #{name}!")
+end
+#+END_SRC
+
+** Implementation Notes
+The function should handle edge cases like empty names.
+
+* Future Plans
+- [ ] Mobile app
+- [ ] API improvements  
+- [ ] Performance optimization

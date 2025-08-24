@@ -19,6 +19,9 @@ def deps do
 end
 ```
 
+## Example
+You can see an example in [examples directory](./example)
+
 ## Roadmap
 - [x] Document Structure
 - [x] TODO keywords
