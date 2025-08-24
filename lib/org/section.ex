@@ -1,23 +1,26 @@
 defmodule Org.Section do
-  defstruct title: "", children: [], contents: []
+  defstruct title: "", todo_keyword: nil, children: [], contents: []
 
   @moduledoc ~S"""
-  Represents a section of a document with a title and possible contents & subsections.
+  Represents a section of a document with a title, optional TODO keyword, and possible contents & subsections.
 
   Example:
-      iex> source = "* Hello\nWorld\n** What's up?\nNothing much.\n** How's it going?\nAll fine, whow are you?\n"
+      iex> source = "* TODO Hello\nWorld\n** DONE What's up?\nNothing much.\n** How's it going?\nAll fine, how are you?\n"
       iex> doc = Org.Parser.parse(source)
       iex> section = Org.section(doc, ["Hello"])
+      iex> section.todo_keyword
+      "TODO"
       iex> section.contents
       [%Org.Paragraph{lines: ["World"]}]
       iex> length(section.children)
       2
-      iex> for child <- section.children, do: child.title
-      ["What's up?", "How's it going?"]
+      iex> for child <- section.children, do: {child.title, child.todo_keyword}
+      [{"What's up?", "DONE"}, {"How's it going?", nil}]
   """
 
   @type t :: %Org.Section{
     title: String.t,
+    todo_keyword: String.t | nil,
     children: list(Org.Section.t),
     contents: list(Org.Content.t),
   }

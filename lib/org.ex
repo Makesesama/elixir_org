@@ -8,10 +8,21 @@ defmodule Org do
 
   Features supported are:
   - Comments
-  - (nested) Sections
+  - (nested) Sections with TODO/DONE keywords
   - Paragraphs
   - Tables
   - Code blocks
+
+  ## TODO Keywords
+
+  Headlines can include TODO keywords (currently supports TODO and DONE):
+
+      iex> doc = Org.load_string("* TODO Write documentation\\n** DONE Research\\n** Implementation")
+      iex> section = hd(doc.sections)
+      iex> section.todo_keyword
+      "TODO"
+      iex> for child <- section.children, do: {child.title, child.todo_keyword}
+      [{"Research", "DONE"}, {"Implementation", nil}]
   """
 
   @type load_mode :: :document | :tokens
@@ -44,7 +55,7 @@ defmodule Org do
       ...>** Second
       ...>*** Third
       ...>* Fourth
-      iex>})
+      ...>})
       iex> Org.section(doc, ["First"]).title
       "First"
       iex> Org.section(doc, ["First", "Second", "Third"]).title
@@ -135,5 +146,33 @@ defmodule Org do
 
   def contents(%Org.Section{} = section) do
     Org.Section.contents(section)
+  end
+
+  @doc ~S"""
+  Extracts all sections with TODO keywords from the document or section.
+
+  Example:
+      iex> doc = Org.load_string("* TODO Task 1\n** DONE Subtask\n* Regular header\n* TODO Task 2")
+      iex> todos = Org.todo_items(doc)
+      iex> for section <- todos, do: {section.title, section.todo_keyword}
+      [{"Task 1", "TODO"}, {"Subtask", "DONE"}, {"Task 2", "TODO"}]
+  """
+  @spec todo_items(Org.Document.t | Org.Section.t) :: list(Org.Section.t)
+  def todo_items(doc_or_section)
+  
+  def todo_items(%Org.Document{sections: sections}) do
+    Enum.flat_map(sections, &extract_todo_sections/1)
+  end
+  
+  def todo_items(%Org.Section{} = section) do
+    extract_todo_sections(section)
+  end
+  
+  defp extract_todo_sections(%Org.Section{todo_keyword: nil, children: children}) do
+    Enum.flat_map(children, &extract_todo_sections/1)
+  end
+  
+  defp extract_todo_sections(%Org.Section{todo_keyword: _todo, children: children} = section) do
+    [section | Enum.flat_map(children, &extract_todo_sections/1)]
   end
 end

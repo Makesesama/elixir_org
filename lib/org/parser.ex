@@ -39,8 +39,14 @@ defmodule Org.Parser do
     %Org.Parser{doc: Org.Document.add_comment(parser.doc, comment)}
   end
 
+  # Handle new 4-element tuple format with TODO keyword
+  defp parse_token({:section_title, level, title, todo_keyword}, parser) do
+    %Org.Parser{doc: Org.Document.add_subsection(parser.doc, level, title, todo_keyword)}
+  end
+  
+  # Handle legacy 3-element tuple format for backward compatibility
   defp parse_token({:section_title, level, title}, parser) do
-    %Org.Parser{doc: Org.Document.add_subsection(parser.doc, level, title)}
+    %Org.Parser{doc: Org.Document.add_subsection(parser.doc, level, title, nil)}
   end
 
   defp parse_token({:empty_line}, parser) do
