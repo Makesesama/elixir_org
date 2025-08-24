@@ -21,39 +21,41 @@ defmodule Org.Section do
   """
 
   @type t :: %Org.Section{
-    title: String.t,
-    todo_keyword: String.t | nil,
-    priority: String.t | nil,
-    children: list(Org.Section.t),
-    contents: list(Org.Content.t),
-  }
+          title: String.t(),
+          todo_keyword: String.t() | nil,
+          priority: String.t() | nil,
+          children: list(Org.Section.t()),
+          contents: list(Org.Content.t())
+        }
 
   def add_nested(parent, 1, child) do
     %Org.Section{parent | children: [child | parent.children]}
   end
 
   def add_nested(parent, level, child) do
-    {first, rest} = case parent.children do
-                      [first | rest] -> {first, rest}
-                      [] -> {%Org.Section{}, []}
-                    end
+    {first, rest} =
+      case parent.children do
+        [first | rest] -> {first, rest}
+        [] -> {%Org.Section{}, []}
+      end
+
     %Org.Section{parent | children: [add_nested(first, level - 1, child) | rest]}
   end
 
   def reverse_recursive(section) do
     %Org.Section{
-      section |
-      children: Enum.reverse(Enum.map(section.children, &reverse_recursive/1)),
-      contents: Enum.reverse(Enum.map(section.contents, &Org.Content.reverse_recursive/1)),
+      section
+      | children: Enum.reverse(Enum.map(section.children, &reverse_recursive/1)),
+        contents: Enum.reverse(Enum.map(section.contents, &Org.Content.reverse_recursive/1))
     }
   end
 
   def find_by_path(_, []) do
-    raise "BUG: can't find section with empty path!"
+    raise ArgumentError, "Cannot find section with empty path - path must contain at least one section title"
   end
 
   def find_by_path([], path) do
-    raise "Section not found with remaining path: #{inspect path}"
+    raise ArgumentError, "Section not found with remaining path: #{inspect(path)}"
   end
 
   def find_by_path([%Org.Section{title: title} = matching_section | _], [title]) do

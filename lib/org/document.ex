@@ -2,10 +2,10 @@ defmodule Org.Document do
   defstruct comments: [], sections: [], contents: []
 
   @type t :: %Org.Document{
-    comments: list(String.t),
-    sections: list(Org.Section.t),
-    contents: list(Org.Content.t),
-  }
+          comments: list(String.t()),
+          sections: list(Org.Section.t()),
+          contents: list(Org.Content.t())
+        }
 
   @moduledoc ~S"""
   Represents an interpreted document.
@@ -28,15 +28,30 @@ defmodule Org.Document do
   def add_subsection(doc, level, title, todo_keyword \\ nil, priority \\ nil)
 
   def add_subsection(doc, 1, title, todo_keyword, priority) do
-    %Org.Document{doc | sections: [%Org.Section{title: title, todo_keyword: todo_keyword, priority: priority} | doc.sections]}
+    %Org.Document{
+      doc
+      | sections: [%Org.Section{title: title, todo_keyword: todo_keyword, priority: priority} | doc.sections]
+    }
   end
 
   def add_subsection(doc, level, title, todo_keyword, priority) do
-    {current, rest} = case doc.sections do
-                        [current | rest] -> {current, rest}
-                        [] -> {%Org.Section{}, []}
-                      end
-    %Org.Document{doc | sections: [Org.Section.add_nested(current, level - 1, %Org.Section{title: title, todo_keyword: todo_keyword, priority: priority}) | rest]}
+    {current, rest} =
+      case doc.sections do
+        [current | rest] -> {current, rest}
+        [] -> {%Org.Section{}, []}
+      end
+
+    %Org.Document{
+      doc
+      | sections: [
+          Org.Section.add_nested(current, level - 1, %Org.Section{
+            title: title,
+            todo_keyword: todo_keyword,
+            priority: priority
+          })
+          | rest
+        ]
+    }
   end
 
   @doc """
@@ -82,10 +97,10 @@ defmodule Org.Document do
   """
   def reverse_recursive(doc) do
     %Org.Document{
-      doc |
-      comments: Enum.reverse(doc.comments),
-      sections: Enum.reverse(Enum.map(doc.sections, &Org.Section.reverse_recursive/1)),
-      contents: Enum.reverse(Enum.map(doc.contents, &Org.Content.reverse_recursive/1)),
+      doc
+      | comments: Enum.reverse(doc.comments),
+        sections: Enum.reverse(Enum.map(doc.sections, &Org.Section.reverse_recursive/1)),
+        contents: Enum.reverse(Enum.map(doc.contents, &Org.Content.reverse_recursive/1))
     }
   end
 

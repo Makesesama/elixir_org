@@ -10,9 +10,10 @@ defprotocol Org.Content do
   def reverse_recursive(content)
 end
 
-# This is just to shut up dialyzer:
+# This implementation is required to make dialyzer happy with the protocol
+# credo:disable-for-next-line Credo.Check.Readability.ModuleDoc
 defimpl Org.Content, for: [Atom, BitString, Float, Function, Integer, List, Map, PID, Port, Reference, Tuple] do
   def reverse_recursive(content) do
-    raise "#{__MODULE__} Not implemented for #{inspect content}"
+    raise "#{__MODULE__} Not implemented for #{inspect(content)}"
   end
 end

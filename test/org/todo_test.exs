@@ -35,39 +35,41 @@ defmodule Org.TodoTest do
       *** Frontend
       ** Testing
       """
+
       doc = Org.Parser.parse(source)
       project = hd(doc.sections)
-      
+
       assert project.title == "Project"
       assert project.todo_keyword == "TODO"
-      
+
       [research, implementation, testing] = project.children
-      
+
       assert research.title == "Research"
       assert research.todo_keyword == "DONE"
-      
+
       assert implementation.title == "Implementation"
       assert implementation.todo_keyword == "TODO"
-      
+
       [backend, frontend] = implementation.children
-      
+
       assert backend.title == "Backend"
       assert backend.todo_keyword == "TODO"
-      
+
       assert frontend.title == "Frontend"
       assert frontend.todo_keyword == nil
-      
+
       assert testing.title == "Testing"
       assert testing.todo_keyword == nil
     end
 
     test "lexer tokenizes TODO keywords correctly" do
       tokens = Org.Lexer.lex("* TODO Task\n** DONE Subtask\n** Another")
+
       assert tokens == [
-        {:section_title, 1, "Task", "TODO", nil},
-        {:section_title, 2, "Subtask", "DONE", nil},
-        {:section_title, 2, "Another", nil, nil}
-      ]
+               {:section_title, 1, "Task", "TODO", nil},
+               {:section_title, 2, "Subtask", "DONE", nil},
+               {:section_title, 2, "Another", nil, nil}
+             ]
     end
   end
 
@@ -108,33 +110,34 @@ defmodule Org.TodoTest do
       *** [#A] High priority frontend (no TODO)
       ** Regular testing (no priority/TODO)
       """
+
       doc = Org.Parser.parse(source)
       project = hd(doc.sections)
-      
+
       assert project.title == "High Priority Project"
       assert project.todo_keyword == "TODO"
       assert project.priority == "A"
-      
+
       [research, implementation, testing] = project.children
-      
+
       assert research.title == "Medium priority research"
       assert research.todo_keyword == "DONE"
       assert research.priority == "B"
-      
+
       assert implementation.title == "High priority implementation"
       assert implementation.todo_keyword == "TODO"
       assert implementation.priority == "A"
-      
+
       [backend, frontend] = implementation.children
-      
+
       assert backend.title == "Low priority backend"
       assert backend.todo_keyword == "TODO"
       assert backend.priority == "C"
-      
+
       assert frontend.title == "High priority frontend (no TODO)"
       assert frontend.todo_keyword == nil
       assert frontend.priority == "A"
-      
+
       assert testing.title == "Regular testing (no priority/TODO)"
       assert testing.todo_keyword == nil
       assert testing.priority == nil
@@ -142,11 +145,12 @@ defmodule Org.TodoTest do
 
     test "lexer tokenizes TODO keywords with priorities correctly" do
       tokens = Org.Lexer.lex("* TODO [#A] Task\n** DONE [#B] Subtask\n** [#C] Another")
+
       assert tokens == [
-        {:section_title, 1, "Task", "TODO", "A"},
-        {:section_title, 2, "Subtask", "DONE", "B"},
-        {:section_title, 2, "Another", nil, "C"}
-      ]
+               {:section_title, 1, "Task", "TODO", "A"},
+               {:section_title, 2, "Subtask", "DONE", "B"},
+               {:section_title, 2, "Another", nil, "C"}
+             ]
     end
   end
 end

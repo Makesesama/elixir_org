@@ -1,10 +1,17 @@
-
 defmodule Org.Table.Row do
+  @moduledoc """
+  Represents a single row in a table with a list of cell contents.
+  """
+
   defstruct cells: []
-  @type t :: %Org.Table.Row{cells: list(String.t)}
+  @type t :: %Org.Table.Row{cells: list(String.t())}
 end
 
 defmodule Org.Table.Separator do
+  @moduledoc """
+  Represents a separator row in a table (typically a horizontal line).
+  """
+
   defstruct []
   @type t :: %Org.Table.Separator{}
 end
@@ -12,7 +19,7 @@ end
 defmodule Org.Table do
   defstruct rows: []
 
-  @type row :: Org.Table.Row.t | Org.Table.Separator.t
+  @type row :: Org.Table.Row.t() | Org.Table.Separator.t()
   @type t :: %Org.Table{rows: list(row)}
 
   @moduledoc ~S"""
@@ -51,7 +58,7 @@ defmodule Org.Table do
       iex> table.rows
       [%Org.Table.Row{cells: ["foo"]}, %Org.Table.Separator{}, %Org.Table.Row{cells: ["bar"]}]
   """
-  @spec new(list(row | list(String.t))) :: t
+  @spec new(list(row | list(String.t()))) :: t
   def new(rows) do
     %Org.Table{rows: Enum.map(rows, &cast_row/1)}
   end
@@ -105,11 +112,17 @@ defmodule Org.Table do
     row
   end
 
-  defp cast_row(cells) do
-    if String.match?(hd(cells), ~r/^\-+/) do
-      %Org.Table.Separator{}
-    else
-      %Org.Table.Row{cells: cells}
+  defp cast_row(cells) when is_list(cells) do
+    case cells do
+      [first_cell | _] when is_binary(first_cell) ->
+        if String.match?(first_cell, ~r/^\-+/) do
+          %Org.Table.Separator{}
+        else
+          %Org.Table.Row{cells: cells}
+        end
+
+      _ ->
+        %Org.Table.Row{cells: cells}
     end
   end
 end

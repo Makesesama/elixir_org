@@ -6,7 +6,7 @@ defmodule Org.ParserTest do
 
   describe "parse document" do
     setup do
-      doc = Org.Parser.parse(OrgTest.example_document)
+      doc = Org.Parser.parse(OrgTest.example_document())
       {:ok, %{doc: doc}}
     end
 
@@ -22,14 +22,14 @@ defmodule Org.ParserTest do
       {["Also", "at", "and"], ["9"]},
       {["Also", "at", "next"], ["10"]},
       {["Also", "at", "to"], ["11"]},
-      {["Also", "at", "one"], ["12"]},
+      {["Also", "at", "one"], ["12"]}
     ])
 
     test "section with paragraph and code", %{doc: doc} do
       assert Org.Section.contents(Org.section(doc, ["Also", "at", "another"])) == [
-        %Org.Paragraph{lines: ["13"]},
-        %Org.CodeBlock{lang: "sql", details: "", lines: ["SELECT * FROM products;"]},
-      ]
+               %Org.Paragraph{lines: ["13"]},
+               %Org.CodeBlock{lang: "sql", details: "", lines: ["SELECT * FROM products;"]}
+             ]
     end
   end
 end

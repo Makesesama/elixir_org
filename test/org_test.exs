@@ -50,5 +50,4 @@ defmodule OrgTest do
   def example_document do
     @document
   end
-
 end

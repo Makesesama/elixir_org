@@ -30,14 +30,14 @@ defmodule Org do
   @type load_mode :: :document | :tokens
 
   @doc "Loads a document from a file at given path"
-  @spec load_file(String.t, load_mode) :: Org.Document.t
+  @spec load_file(String.t(), load_mode) :: Org.Document.t()
   def load_file(path, load_mode \\ :document) do
     {:ok, data} = File.read(path)
     load_string(data, load_mode)
   end
 
   @doc "Loads a document from the given source string"
-  @spec load_string(String.t, load_mode) :: Org.Document.t
+  @spec load_string(String.t(), load_mode) :: Org.Document.t()
   def load_string(data, load_mode \\ :document)
 
   def load_string(data, :document) do
@@ -65,7 +65,7 @@ defmodule Org do
       iex> Org.section(doc, ["Fourth"]).title
       "Fourth"
   """
-  @spec section(Org.Document.t, list(String.t)) :: Org.Section.t
+  @spec section(Org.Document.t(), list(String.t())) :: Org.Section.t()
   def section(doc, path) do
     Org.Section.find_by_path(doc.sections, path)
   end
@@ -83,7 +83,7 @@ defmodule Org do
       iex> Org.tables(doc)
       [%Org.Table{rows: [%Org.Table.Row{cells: ["x", "y"]}, %Org.Table.Row{cells: ["1", "7"]}]}]
   """
-  @spec tables(Org.Section.t | Org.Document.t) :: list(Org.Table.t)
+  @spec tables(Org.Section.t() | Org.Document.t()) :: list(Org.Table.t())
   def tables(section_or_document) do
     for %Org.Table{} = table <- Org.contents(section_or_document), do: table
   end
@@ -134,14 +134,15 @@ defmodule Org do
       iex> Org.paragraphs(doc)
       [%Org.Paragraph{lines: ["First paragraph"]}, %Org.Paragraph{lines: ["Second paragraph"]}]
   """
-  @spec paragraphs(Org.Section.t | Org.Document.t) :: list(Org.Paragraph.t)
+  @spec paragraphs(Org.Section.t() | Org.Document.t()) :: list(Org.Paragraph.t())
   def paragraphs(section_or_document) do
     for %Org.Paragraph{} = paragraph <- Org.contents(section_or_document), do: paragraph
   end
 
   @doc "Extracts all contents from given section or document"
-  @spec contents(Org.Document.t | Org.Section.t) :: list(Org.Content.t)
+  @spec contents(Org.Document.t() | Org.Section.t()) :: list(Org.Content.t())
   def contents(section_or_document)
+
   def contents(%Org.Document{} = doc) do
     Org.Document.contents(doc)
   end
@@ -159,21 +160,21 @@ defmodule Org do
       iex> for section <- todos, do: {section.title, section.todo_keyword}
       [{"Task 1", "TODO"}, {"Subtask", "DONE"}, {"Task 2", "TODO"}]
   """
-  @spec todo_items(Org.Document.t | Org.Section.t) :: list(Org.Section.t)
+  @spec todo_items(Org.Document.t() | Org.Section.t()) :: list(Org.Section.t())
   def todo_items(doc_or_section)
-  
+
   def todo_items(%Org.Document{sections: sections}) do
     Enum.flat_map(sections, &extract_todo_sections/1)
   end
-  
+
   def todo_items(%Org.Section{} = section) do
     extract_todo_sections(section)
   end
-  
+
   defp extract_todo_sections(%Org.Section{todo_keyword: nil, children: children}) do
     Enum.flat_map(children, &extract_todo_sections/1)
   end
-  
+
   defp extract_todo_sections(%Org.Section{todo_keyword: _todo, children: children} = section) do
     [section | Enum.flat_map(children, &extract_todo_sections/1)]
   end
@@ -187,21 +188,24 @@ defmodule Org do
       iex> for section <- high_priority, do: section.title
       ["High Priority", "Another High"]
   """
-  @spec sections_by_priority(Org.Document.t | Org.Section.t, String.t) :: list(Org.Section.t)
+  @spec sections_by_priority(Org.Document.t() | Org.Section.t(), String.t()) :: list(Org.Section.t())
   def sections_by_priority(doc_or_section, priority)
-  
+
   def sections_by_priority(%Org.Document{sections: sections}, priority) do
     Enum.flat_map(sections, &extract_sections_by_priority(&1, priority))
   end
-  
+
   def sections_by_priority(%Org.Section{} = section, priority) do
     extract_sections_by_priority(section, priority)
   end
-  
-  defp extract_sections_by_priority(%Org.Section{priority: target_priority, children: children} = section, target_priority) do
+
+  defp extract_sections_by_priority(
+         %Org.Section{priority: target_priority, children: children} = section,
+         target_priority
+       ) do
     [section | Enum.flat_map(children, &extract_sections_by_priority(&1, target_priority))]
   end
-  
+
   defp extract_sections_by_priority(%Org.Section{children: children}, target_priority) do
     Enum.flat_map(children, &extract_sections_by_priority(&1, target_priority))
   end

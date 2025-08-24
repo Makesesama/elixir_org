@@ -2,10 +2,10 @@ defmodule Org.CodeBlock do
   defstruct lang: "", details: "", lines: []
 
   @type t :: %Org.CodeBlock{
-    lang: String.t,
-    details: String.t,
-    lines: list(String.t),
-  }
+          lang: String.t(),
+          details: String.t(),
+          lines: list(String.t())
+        }
 
   @moduledoc ~S"""
   Represents a block of code.
@@ -17,13 +17,13 @@ defmodule Org.CodeBlock do
   """
 
   @doc "Construct a new code block, with given language details & lines"
-  @spec new(String.t, String.t, list(String.t)) :: t
+  @spec new(String.t(), String.t(), list(String.t())) :: t
   def new(lang, details, lines \\ []) do
     %Org.CodeBlock{lang: lang, details: details, lines: lines}
   end
 
   @doc "Prepend a line of code. Used by the parser."
-  @spec prepend_line(t, String.t) :: t
+  @spec prepend_line(t, String.t()) :: t
   def prepend_line(code_block, line) do
     %Org.CodeBlock{code_block | lines: [line | code_block.lines]}
   end
@@ -34,4 +34,3 @@ defimpl Org.Content, for: Org.CodeBlock do
     %Org.CodeBlock{code_block | lines: Enum.reverse(code_block.lines)}
   end
 end
-

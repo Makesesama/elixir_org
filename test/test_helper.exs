@@ -6,13 +6,14 @@ defmodule OrgTestHelper do
           assert Enum.at(tokens, unquote(index)) == unquote(token)
         end
       end
-    end
-    ++
-    [quote do
-      test "There are #{unquote(length(expected))} tokens", %{tokens: tokens} do
-        assert length(tokens) == unquote(length(expected))
-      end
-    end]
+    end ++
+      [
+        quote do
+          test "There are #{unquote(length(expected))} tokens", %{tokens: tokens} do
+            assert length(tokens) == unquote(length(expected))
+          end
+        end
+      ]
   end
 
   defmacro test_section_text_contents(expected) do

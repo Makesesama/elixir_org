@@ -1,18 +1,17 @@
 defmodule Org.Lexer do
   defstruct tokens: [], mode: :normal
 
-  @type token :: (
-    {:comment, String.t} |
-    {:section_title, integer, String.t, String.t | nil, String.t | nil} |
-    {:table_row, list(String.t)} |
-    {:empty_line} |
-    {:text, String.t}
-  )
+  @type token ::
+          {:comment, String.t()}
+          | {:section_title, integer, String.t(), String.t() | nil, String.t() | nil}
+          | {:table_row, list(String.t())}
+          | {:empty_line}
+          | {:text, String.t()}
 
   @type t :: %Org.Lexer{
-    tokens: list(token),
-    mode: :normal | :raw
-  }
+          tokens: list(token),
+          mode: :normal | :raw
+        }
 
   @moduledoc ~S"""
   Splits an org-document into tokens.
@@ -31,13 +30,13 @@ defmodule Org.Lexer do
        {:empty_line}]
   """
 
-  @spec lex(String.t) :: list(token)
+  @spec lex(String.t()) :: list(token)
   def lex(text) do
     text
     |> String.split("\n")
     |> lex_lines
     |> Map.get(:tokens)
-    |> Enum.reverse
+    |> Enum.reverse()
   end
 
   defp lex_lines(lexer \\ %Org.Lexer{}, lines)
@@ -52,40 +51,38 @@ defmodule Org.Lexer do
     |> lex_lines(rest)
   end
 
-  @begin_src_re     ~r/^#\+BEGIN_SRC(?:\s+([^\s]*)\s?(.*)|)$/
-  @end_src_re       ~r/^#\+END_SRC$/
-  @comment_re       ~r/^#(.+)$/
+  @begin_src_re ~r/^#\+BEGIN_SRC(?:\s+([^\s]*)\s?(.*)|)$/
+  @end_src_re ~r/^#\+END_SRC$/
+  @comment_re ~r/^#(.+)$/
   @section_title_re ~r/^(\*+)\s+(?:(TODO|DONE)\s+)?(?:\[#([ABC])\]\s+)?(.+)$/
-  @empty_line_re    ~r/^\s*$/
-  @table_row_re     ~r/^\s*(?:\|[^|]*)+\|\s*$/
+  @empty_line_re ~r/^\s*$/
+  @table_row_re ~r/^\s*(?:\|[^|]*)+\|\s*$/
 
   defp lex_line(line, %Org.Lexer{mode: :normal} = lexer) do
     cond do
       match = Regex.run(@begin_src_re, line) ->
         [_, lang, details] = match
         append_token(lexer, {:begin_src, lang, details}) |> set_mode(:raw)
+
       match = Regex.run(@comment_re, line) ->
         [_, text] = match
         append_token(lexer, {:comment, text})
+
       match = Regex.run(@section_title_re, line) ->
-        case match do
-          [_, nesting, "", "", title] ->
-            append_token(lexer, {:section_title, String.length(nesting), title, nil, nil})
-          [_, nesting, todo_keyword, "", title] ->
-            append_token(lexer, {:section_title, String.length(nesting), title, todo_keyword, nil})
-          [_, nesting, "", priority, title] ->
-            append_token(lexer, {:section_title, String.length(nesting), title, nil, priority})
-          [_, nesting, todo_keyword, priority, title] ->
-            append_token(lexer, {:section_title, String.length(nesting), title, todo_keyword, priority})
-        end
+        parse_section_title_match(lexer, match)
+
       Regex.run(@empty_line_re, line) ->
         append_token(lexer, {:empty_line})
+
       Regex.run(@table_row_re, line) ->
-        cells = ~r/\|(?<cell>[^|]+)/
-        |> Regex.scan(line, capture: :all_names)
-        |> List.flatten
-        |> Enum.map(&String.trim/1)
+        cells =
+          ~r/\|(?<cell>[^|]+)/
+          |> Regex.scan(line, capture: :all_names)
+          |> List.flatten()
+          |> Enum.map(&String.trim/1)
+
         append_token(lexer, {:table_row, cells})
+
       true ->
         append_token(lexer, {:text, line})
     end
@@ -105,5 +102,21 @@ defmodule Org.Lexer do
 
   defp set_mode(%Org.Lexer{} = lexer, mode) do
     %Org.Lexer{lexer | mode: mode}
+  end
+
+  defp parse_section_title_match(lexer, match) do
+    case match do
+      [_, nesting, "", "", title] ->
+        append_token(lexer, {:section_title, String.length(nesting), title, nil, nil})
+
+      [_, nesting, todo_keyword, "", title] ->
+        append_token(lexer, {:section_title, String.length(nesting), title, todo_keyword, nil})
+
+      [_, nesting, "", priority, title] ->
+        append_token(lexer, {:section_title, String.length(nesting), title, nil, priority})
+
+      [_, nesting, todo_keyword, priority, title] ->
+        append_token(lexer, {:section_title, String.length(nesting), title, todo_keyword, priority})
+    end
   end
 end

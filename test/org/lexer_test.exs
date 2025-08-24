@@ -6,11 +6,11 @@ defmodule Org.LexerTest do
 
   describe "lex document" do
     setup do
-      tokens = Org.Lexer.lex(OrgTest.example_document)
+      tokens = Org.Lexer.lex(OrgTest.example_document())
       {:ok, %{tokens: tokens}}
     end
 
-    OrgTestHelper.test_tokens [
+    OrgTestHelper.test_tokens([
       {:comment, "+TITLE: Hello World"},
       {:empty_line},
       {:section_title, 1, "Hello", nil, nil},
@@ -53,6 +53,6 @@ defmodule Org.LexerTest do
       {:raw_line, "SELECT * FROM products;"},
       {:end_src},
       {:empty_line}
-    ]
+    ])
   end
 end
