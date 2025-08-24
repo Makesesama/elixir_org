@@ -8,21 +8,23 @@ defmodule Org do
 
   Features supported are:
   - Comments
-  - (nested) Sections with TODO/DONE keywords
+  - (nested) Sections with TODO/DONE keywords and priorities
   - Paragraphs
   - Tables
   - Code blocks
 
-  ## TODO Keywords
+  ## TODO Keywords and Priorities
 
-  Headlines can include TODO keywords (currently supports TODO and DONE):
+  Headlines can include TODO keywords (currently supports TODO and DONE) and priorities ([#A], [#B], [#C]):
 
-      iex> doc = Org.load_string("* TODO Write documentation\\n** DONE Research\\n** Implementation")
+      iex> doc = Org.load_string("* TODO [#A] Write documentation\\n** DONE [#B] Research\\n** Implementation")
       iex> section = hd(doc.sections)
       iex> section.todo_keyword
       "TODO"
-      iex> for child <- section.children, do: {child.title, child.todo_keyword}
-      [{"Research", "DONE"}, {"Implementation", nil}]
+      iex> section.priority
+      "A"
+      iex> for child <- section.children, do: {child.title, child.todo_keyword, child.priority}
+      [{"Research", "DONE", "B"}, {"Implementation", nil, nil}]
   """
 
   @type load_mode :: :document | :tokens
@@ -174,5 +176,33 @@ defmodule Org do
   
   defp extract_todo_sections(%Org.Section{todo_keyword: _todo, children: children} = section) do
     [section | Enum.flat_map(children, &extract_todo_sections/1)]
+  end
+
+  @doc ~S"""
+  Extracts all sections with the specified priority from the document or section.
+
+  Example:
+      iex> doc = Org.load_string("* TODO [#A] High Priority\n** DONE [#B] Medium Priority\n* [#A] Another High\n* Regular")
+      iex> high_priority = Org.sections_by_priority(doc, "A")
+      iex> for section <- high_priority, do: section.title
+      ["High Priority", "Another High"]
+  """
+  @spec sections_by_priority(Org.Document.t | Org.Section.t, String.t) :: list(Org.Section.t)
+  def sections_by_priority(doc_or_section, priority)
+  
+  def sections_by_priority(%Org.Document{sections: sections}, priority) do
+    Enum.flat_map(sections, &extract_sections_by_priority(&1, priority))
+  end
+  
+  def sections_by_priority(%Org.Section{} = section, priority) do
+    extract_sections_by_priority(section, priority)
+  end
+  
+  defp extract_sections_by_priority(%Org.Section{priority: target_priority, children: children} = section, target_priority) do
+    [section | Enum.flat_map(children, &extract_sections_by_priority(&1, target_priority))]
+  end
+  
+  defp extract_sections_by_priority(%Org.Section{children: children}, target_priority) do
+    Enum.flat_map(children, &extract_sections_by_priority(&1, target_priority))
   end
 end

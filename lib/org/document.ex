@@ -24,19 +24,19 @@ defmodule Org.Document do
     %Org.Document{doc | comments: [comment | doc.comments]}
   end
 
-  @doc "Prepend a subsection at the given level with optional TODO keyword."
-  def add_subsection(doc, level, title, todo_keyword \\ nil)
+  @doc "Prepend a subsection at the given level with optional TODO keyword and priority."
+  def add_subsection(doc, level, title, todo_keyword \\ nil, priority \\ nil)
 
-  def add_subsection(doc, 1, title, todo_keyword) do
-    %Org.Document{doc | sections: [%Org.Section{title: title, todo_keyword: todo_keyword} | doc.sections]}
+  def add_subsection(doc, 1, title, todo_keyword, priority) do
+    %Org.Document{doc | sections: [%Org.Section{title: title, todo_keyword: todo_keyword, priority: priority} | doc.sections]}
   end
 
-  def add_subsection(doc, level, title, todo_keyword) do
+  def add_subsection(doc, level, title, todo_keyword, priority) do
     {current, rest} = case doc.sections do
                         [current | rest] -> {current, rest}
                         [] -> {%Org.Section{}, []}
                       end
-    %Org.Document{doc | sections: [Org.Section.add_nested(current, level - 1, %Org.Section{title: title, todo_keyword: todo_keyword}) | rest]}
+    %Org.Document{doc | sections: [Org.Section.add_nested(current, level - 1, %Org.Section{title: title, todo_keyword: todo_keyword, priority: priority}) | rest]}
   end
 
   @doc """
@@ -57,14 +57,14 @@ defmodule Org.Document do
 
   Example (sections):
       iex> doc = %Org.Document{}
-      iex> doc = Org.Document.add_subsection(doc, 1, "First", nil)
-      iex> doc = Org.Document.add_subsection(doc, 1, "Second", "TODO")
-      iex> doc = Org.Document.add_subsection(doc, 1, "Third", "DONE")
-      iex> for %Org.Section{title: title, todo_keyword: todo} <- doc.sections, do: {title, todo}
-      [{"Third", "DONE"}, {"Second", "TODO"}, {"First", nil}]
+      iex> doc = Org.Document.add_subsection(doc, 1, "First", nil, nil)
+      iex> doc = Org.Document.add_subsection(doc, 1, "Second", "TODO", "A")
+      iex> doc = Org.Document.add_subsection(doc, 1, "Third", "DONE", "B")
+      iex> for %Org.Section{title: title, todo_keyword: todo, priority: priority} <- doc.sections, do: {title, todo, priority}
+      [{"Third", "DONE", "B"}, {"Second", "TODO", "A"}, {"First", nil, nil}]
       iex> doc = Org.Document.reverse_recursive(doc)
-      iex> for %Org.Section{title: title, todo_keyword: todo} <- doc.sections, do: {title, todo}
-      [{"First", nil}, {"Second", "TODO"}, {"Third", "DONE"}]
+      iex> for %Org.Section{title: title, todo_keyword: todo, priority: priority} <- doc.sections, do: {title, todo, priority}
+      [{"First", nil, nil}, {"Second", "TODO", "A"}, {"Third", "DONE", "B"}]
 
   Example (contents):
       iex> doc = %Org.Document{}
