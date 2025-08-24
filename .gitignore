@@ -28,6 +28,9 @@ org-*.tar
 # Language Server Protocol files
 /.elixir_ls/
 
+# Dialyzer PLT files
+/priv/plts/
+
 *~
 *.swp
 

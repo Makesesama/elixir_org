@@ -14,6 +14,10 @@ defmodule Org.Mixfile do
       docs: [
         main: "Org",
         extras: ["README.md"]
+      ],
+      dialyzer: [
+        plt_file: {:no_warn, "priv/plts/dialyzer.plt"},
+        plt_add_apps: [:ex_unit]
       ]
     ]
   end

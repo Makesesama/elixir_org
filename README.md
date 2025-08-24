@@ -1,5 +1,8 @@
 # Org
 
+[![CI](https://github.com/Makesesama/elixir_org/actions/workflows/ci.yml/badge.svg)](https://github.com/Makesesama/elixir_org/actions/workflows/ci.yml)
+[![Hex.pm](https://img.shields.io/hexpm/v/org.svg)](https://hex.pm/packages/org)
+
 Implements an org-mode parser.
 
 Further documentation is available [on hexdocs.pm](https://hexdocs.pm/org/Org.html)
