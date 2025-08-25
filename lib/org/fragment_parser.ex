@@ -187,11 +187,14 @@ defmodule Org.FragmentParser do
     trimmed = String.trim(text)
 
     case Regex.run(~r/^(\*+)\s*(?:(TODO|DONE|CANCELLED)\s+)?(?:\[#([ABC])\]\s+)?(.*)/, trimmed) do
-      [_, _stars, todo_keyword, priority, title] ->
+      [_, _stars, todo_keyword, priority, title_and_tags] ->
+        {title, tags} = parse_title_and_tags(title_and_tags)
+
         section = %Section{
           title: normalize_string(title),
           todo_keyword: normalize_keyword(todo_keyword),
           priority: normalize_keyword(priority),
+          tags: tags,
           children: [],
           contents: []
         }
@@ -432,8 +435,9 @@ defmodule Org.FragmentParser do
     stars = String.duplicate("*", level)
     todo_part = if section.todo_keyword, do: " #{section.todo_keyword}", else: ""
     priority_part = if section.priority, do: " [##{section.priority}]", else: ""
+    tags_part = render_tags(section.tags)
 
-    "#{stars}#{todo_part}#{priority_part} #{section.title}"
+    "#{stars}#{todo_part}#{priority_part} #{section.title}#{tags_part}"
   end
 
   defp render_by_type(%Paragraph{lines: lines}, :content, _context) do
@@ -508,4 +512,36 @@ defmodule Org.FragmentParser do
   defp normalize_keyword(keyword) when is_binary(keyword), do: keyword
 
   defp normalize_string(str) when is_binary(str), do: String.trim(str)
+
+  defp parse_title_and_tags(text) do
+    # Match tags at the end of the line in format :tag1:tag2:
+    # Tags must be at the end, optionally preceded by whitespace, and contain no spaces within tag names
+    case Regex.run(~r/^(.*?)\s*(:[^:\s]+(?::[^:\s]+)*:)\s*$/, String.trim(text)) do
+      [_, title, tags_string] ->
+        tags = parse_tags(tags_string)
+        {String.trim(title), tags}
+
+      nil ->
+        # No tags found, return the whole text as title
+        {String.trim(text), []}
+    end
+  end
+
+  defp parse_tags(tags_string) do
+    # Extract tags from :tag1:tag2: format
+    tags_string
+    |> String.trim()
+    |> String.trim_leading(":")
+    |> String.trim_trailing(":")
+    |> String.split(":")
+    |> Enum.reject(&(&1 == ""))
+    |> Enum.map(&String.trim/1)
+  end
+
+  defp render_tags([]), do: ""
+
+  defp render_tags(tags) when is_list(tags) do
+    tags_string = tags |> Enum.join(":")
+    " :#{tags_string}:"
+  end
 end

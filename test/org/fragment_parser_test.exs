@@ -13,6 +13,7 @@ defmodule Org.FragmentParserTest do
       assert fragment.content.title == "Important task"
       assert fragment.content.todo_keyword == "TODO"
       assert fragment.content.priority == "A"
+      assert fragment.content.tags == []
       assert fragment.original_text == text
       assert fragment.range == {{1, 1}, {1, 28}}
     end
@@ -25,6 +26,7 @@ defmodule Org.FragmentParserTest do
       assert fragment.content.title == "Simple section"
       assert fragment.content.todo_keyword == nil
       assert fragment.content.priority == nil
+      assert fragment.content.tags == []
     end
 
     test "parses paragraph fragment" do
@@ -149,6 +151,48 @@ defmodule Org.FragmentParserTest do
       assert fragment.type == :line
       assert fragment.content == ""
     end
+
+    test "parses section fragment with single tag" do
+      text = "* Meeting notes :work:"
+      fragment = FragmentParser.parse_fragment(text)
+
+      assert fragment.type == :section
+      assert fragment.content.title == "Meeting notes"
+      assert fragment.content.todo_keyword == nil
+      assert fragment.content.priority == nil
+      assert fragment.content.tags == ["work"]
+    end
+
+    test "parses section fragment with multiple tags" do
+      text = "** TODO [#B] Project planning :work:urgent:project:"
+      fragment = FragmentParser.parse_fragment(text)
+
+      assert fragment.type == :section
+      assert fragment.content.title == "Project planning"
+      assert fragment.content.todo_keyword == "TODO"
+      assert fragment.content.priority == "B"
+      assert fragment.content.tags == ["work", "urgent", "project"]
+    end
+
+    test "parses section fragment with tags and extra whitespace" do
+      text = "*   Task with tags   :personal:home:  "
+      fragment = FragmentParser.parse_fragment(text)
+
+      assert fragment.type == :section
+      assert fragment.content.title == "Task with tags"
+      assert fragment.content.todo_keyword == nil
+      assert fragment.content.priority == nil
+      assert fragment.content.tags == ["personal", "home"]
+    end
+
+    test "parses section fragment with tags but no title spaces" do
+      text = "* Title:tag1:tag2:"
+      fragment = FragmentParser.parse_fragment(text)
+
+      assert fragment.type == :section
+      assert fragment.content.title == "Title"
+      assert fragment.content.tags == ["tag1", "tag2"]
+    end
   end
 
   describe "parse_fragments/2" do
@@ -254,6 +298,27 @@ defmodule Org.FragmentParserTest do
       assert rendered =~ "#+BEGIN_SRC python"
       assert rendered =~ "print('hello')"
       assert rendered =~ "#+END_SRC"
+    end
+
+    test "renders section fragment with tags" do
+      fragment = FragmentParser.parse_fragment("* Meeting notes :work:urgent:")
+      rendered = FragmentParser.render_fragment(fragment)
+
+      assert rendered == "* Meeting notes :work:urgent:"
+    end
+
+    test "renders section fragment with TODO, priority, and tags" do
+      fragment = FragmentParser.parse_fragment("** TODO [#A] Important task :work:deadline:")
+      rendered = FragmentParser.render_fragment(fragment)
+
+      assert rendered == "** TODO [#A] Important task :work:deadline:"
+    end
+
+    test "renders section fragment without tags" do
+      fragment = FragmentParser.parse_fragment("* Simple task")
+      rendered = FragmentParser.render_fragment(fragment)
+
+      assert rendered == "* Simple task"
     end
   end
 
@@ -400,6 +465,44 @@ defmodule Org.FragmentParserTest do
 
       assert fragment.type == :section
       assert fragment.content.title == "中文标题"
+      assert fragment.content.tags == []
+    end
+
+    test "handles sections with malformed tags" do
+      text = "* Task with :incomplete tag"
+      fragment = FragmentParser.parse_fragment(text)
+
+      assert fragment.type == :section
+      assert fragment.content.title == "Task with :incomplete tag"
+      assert fragment.content.tags == []
+    end
+
+    test "handles sections with empty tags" do
+      text = "* Task with ::"
+      fragment = FragmentParser.parse_fragment(text)
+
+      assert fragment.type == :section
+      assert fragment.content.title == "Task with ::"
+      assert fragment.content.tags == []
+    end
+
+    test "handles sections with colon in title but not tags" do
+      text = "* Meeting at 10:30 AM"
+      fragment = FragmentParser.parse_fragment(text)
+
+      assert fragment.type == :section
+      assert fragment.content.title == "Meeting at 10:30 AM"
+      assert fragment.content.tags == []
+    end
+
+    test "handles sections with tags containing spaces (invalid)" do
+      text = "* Task :tag with spaces:"
+      fragment = FragmentParser.parse_fragment(text)
+
+      # Tags with spaces are not valid, should be treated as part of title
+      assert fragment.type == :section
+      assert fragment.content.title == "Task :tag with spaces:"
+      assert fragment.content.tags == []
     end
   end
 end

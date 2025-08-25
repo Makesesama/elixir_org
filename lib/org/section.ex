@@ -1,5 +1,5 @@
 defmodule Org.Section do
-  defstruct title: "", todo_keyword: nil, priority: nil, children: [], contents: []
+  defstruct title: "", todo_keyword: nil, priority: nil, tags: [], children: [], contents: []
 
   @moduledoc ~S"""
   Represents a section of a document with a title, optional TODO keyword, priority, and possible contents & subsections.
@@ -24,6 +24,7 @@ defmodule Org.Section do
           title: String.t(),
           todo_keyword: String.t() | nil,
           priority: String.t() | nil,
+          tags: [String.t()],
           children: list(Org.Section.t()),
           contents: list(Org.Content.t())
         }
