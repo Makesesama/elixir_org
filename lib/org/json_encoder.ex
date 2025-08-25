@@ -24,6 +24,9 @@ defmodule Org.JSONEncoder do
       title: section.title,
       todo_keyword: section.todo_keyword,
       priority: section.priority,
+      tags: section.tags || [],
+      properties: section.properties || %{},
+      metadata: encode_metadata(section.metadata || %{}),
       children: Enum.map(section.children, &encode/1),
       contents: Enum.map(section.contents, &encode/1)
     }
@@ -121,6 +124,28 @@ defmodule Org.JSONEncoder do
   defp encode_span(%Org.FormattedText.Span{} = span), do: encode(span)
   defp encode_span(%Org.FormattedText.Link{} = link), do: encode(link)
   defp encode_span(text) when is_binary(text), do: text
+
+  # Private helper to encode metadata timestamps
+  defp encode_metadata(metadata) when is_map(metadata) do
+    Enum.into(metadata, %{}, fn
+      {key, %Org.Timestamp{} = timestamp} ->
+        {key,
+         %{
+           type: "timestamp",
+           timestamp_type: timestamp.type,
+           date: Date.to_iso8601(timestamp.date),
+           start_time: if(timestamp.start_time, do: Time.to_iso8601(timestamp.start_time), else: nil),
+           end_time: if(timestamp.end_time, do: Time.to_iso8601(timestamp.end_time), else: nil),
+           day_name: timestamp.day_name,
+           repeater: timestamp.repeater,
+           warning: timestamp.warning,
+           raw: timestamp.raw
+         }}
+
+      {key, value} ->
+        {key, value}
+    end)
+  end
 
   @doc """
   Converts an Org structure to a JSON string using Elixir's built-in JSON library.

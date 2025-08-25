@@ -37,6 +37,10 @@ You can see an example in [examples directory](./example)
 - [x] Parse Fragments
 - [x] Tags
 - [x] Custom TODO keywords
-- [ ] Metadata and Properties
+- [x] Metadata and Properties
 - [ ] Streaming of files
+- [ ] Denote Support
+- [ ] Org Roam support
+- [ ] Something like org-ql
+- [ ] Handling org-directories and multi file parsing
 

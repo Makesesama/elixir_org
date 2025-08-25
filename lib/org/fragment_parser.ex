@@ -21,7 +21,7 @@ defmodule Org.FragmentParser do
   - Context-aware parsing
   """
 
-  alias Org.{CodeBlock, List, Paragraph, Section, Table}
+  alias Org.{CodeBlock, List, Paragraph, PropertyDrawer, Section, Table}
 
   @type fragment_type :: :section | :content | :line | :text
   @type position :: {line :: non_neg_integer(), column :: non_neg_integer()}
@@ -279,7 +279,10 @@ defmodule Org.FragmentParser do
 
   defp parse_by_type(text, :section, start_pos, context, keyword_config) do
     # Parse section header using regex with dynamic keywords
-    trimmed = String.trim(text)
+    lines = String.split(text, "\n", trim: false)
+    first_line = hd(lines)
+    rest_lines = tl(lines)
+    trimmed = String.trim(first_line)
     all_keywords = get_all_keywords(keyword_config)
     keyword_pattern = build_keyword_regex_pattern(all_keywords)
 
@@ -288,12 +291,21 @@ defmodule Org.FragmentParser do
     case Regex.run(regex, trimmed) do
       [_, _stars, todo_keyword, priority, title_and_tags] ->
         {title, tags} = parse_title_and_tags(title_and_tags)
+        # Parse properties and metadata from following lines
+        {properties, metadata, _remaining} =
+          if length(rest_lines) > 0 do
+            PropertyDrawer.extract_all(rest_lines)
+          else
+            {%{}, %{}, []}
+          end
 
         section = %Section{
           title: normalize_string(title),
           todo_keyword: normalize_keyword(todo_keyword),
           priority: normalize_keyword(priority),
           tags: tags,
+          properties: properties,
+          metadata: metadata,
           children: [],
           contents: []
         }
@@ -536,7 +548,12 @@ defmodule Org.FragmentParser do
     priority_part = if section.priority, do: " [##{section.priority}]", else: ""
     tags_part = render_tags(section.tags)
 
-    "#{stars}#{todo_part}#{priority_part} #{section.title}#{tags_part}"
+    header_line = "#{stars}#{todo_part}#{priority_part} #{section.title}#{tags_part}"
+    # Render properties and metadata if present
+    property_lines = PropertyDrawer.render_properties(section.properties || %{})
+    metadata_lines = PropertyDrawer.render_metadata(section.metadata || %{})
+    all_lines = [header_line] ++ property_lines ++ metadata_lines
+    Enum.join(all_lines, "\n")
   end
 
   defp render_by_type(%Paragraph{lines: lines}, :content, _context) do
@@ -655,16 +672,5 @@ defmodule Org.FragmentParser do
   defp build_keyword_regex_pattern(keywords) do
     keywords
     |> Enum.map_join("|", &Regex.escape/1)
-  end
-
-  defp find_keyword_sequence(keyword, keyword_config) do
-    Enum.find(keyword_config.sequences, fn seq ->
-      keyword in seq.todo_keywords or keyword in seq.done_keywords
-    end) || keyword_config.default_sequence
-  end
-
-  defp done_keyword?(keyword, keyword_config) do
-    seq = find_keyword_sequence(keyword, keyword_config)
-    keyword in seq.done_keywords
   end
 end

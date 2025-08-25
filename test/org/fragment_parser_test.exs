@@ -618,4 +618,266 @@ defmodule Org.FragmentParserTest do
       assert config.default_sequence == seq1
     end
   end
+
+  describe "properties and metadata support" do
+    test "parses section with properties" do
+      text = """
+      * Task Title
+        :PROPERTIES:
+        :ID: 12345
+        :Author: John Doe
+        :Priority: High
+        :END:
+      """
+
+      fragment = FragmentParser.parse_fragment(text)
+
+      assert fragment.type == :section
+      assert fragment.content.title == "Task Title"
+
+      assert fragment.content.properties == %{
+               "ID" => "12345",
+               "Author" => "John Doe",
+               "Priority" => "High"
+             }
+
+      assert fragment.content.metadata == %{}
+    end
+
+    test "parses section with metadata" do
+      text = """
+      * TODO Important Task
+        SCHEDULED: <2024-01-15 Mon>
+        DEADLINE: <2024-01-20 Sat>
+      """
+
+      fragment = FragmentParser.parse_fragment(text)
+
+      assert fragment.type == :section
+      assert fragment.content.title == "Important Task"
+      assert fragment.content.todo_keyword == "TODO"
+
+      assert %Org.Timestamp{} = fragment.content.metadata.scheduled
+      assert fragment.content.metadata.scheduled.type == :active
+      assert fragment.content.metadata.scheduled.date == ~D[2024-01-15]
+      assert fragment.content.metadata.scheduled.day_name == "Mon"
+
+      assert %Org.Timestamp{} = fragment.content.metadata.deadline
+      assert fragment.content.metadata.deadline.type == :active
+      assert fragment.content.metadata.deadline.date == ~D[2024-01-20]
+      assert fragment.content.metadata.deadline.day_name == "Sat"
+
+      assert fragment.content.properties == %{}
+    end
+
+    test "parses section with both properties and metadata" do
+      text = """
+      ** DONE [#A] Complex Task :work:urgent:
+         :PROPERTIES:
+         :CUSTOM_ID: complex-task
+         :EXPORT_FILE_NAME: task-output
+         :END:
+         SCHEDULED: <2024-01-15 Mon>
+         CLOSED: [2024-01-18 Thu]
+      """
+
+      fragment = FragmentParser.parse_fragment(text)
+
+      assert fragment.type == :section
+      assert fragment.content.title == "Complex Task"
+      assert fragment.content.todo_keyword == "DONE"
+      assert fragment.content.priority == "A"
+      assert fragment.content.tags == ["work", "urgent"]
+
+      assert fragment.content.properties == %{
+               "CUSTOM_ID" => "complex-task",
+               "EXPORT_FILE_NAME" => "task-output"
+             }
+
+      assert %Org.Timestamp{} = fragment.content.metadata.scheduled
+      assert fragment.content.metadata.scheduled.type == :active
+      assert fragment.content.metadata.scheduled.date == ~D[2024-01-15]
+      assert fragment.content.metadata.scheduled.day_name == "Mon"
+
+      assert %Org.Timestamp{} = fragment.content.metadata.closed
+      assert fragment.content.metadata.closed.type == :inactive
+      assert fragment.content.metadata.closed.date == ~D[2024-01-18]
+      assert fragment.content.metadata.closed.day_name == "Thu"
+    end
+
+    test "parses section without properties or metadata" do
+      text = "* Simple Task"
+      fragment = FragmentParser.parse_fragment(text)
+
+      assert fragment.type == :section
+      assert fragment.content.title == "Simple Task"
+      assert fragment.content.properties == %{}
+      assert fragment.content.metadata == %{}
+    end
+
+    test "renders section with properties back to org format" do
+      text = """
+      * Task Title
+        :PROPERTIES:
+        :ID: 12345
+        :Author: John Doe
+        :END:
+      """
+
+      fragment = FragmentParser.parse_fragment(text)
+      rendered = FragmentParser.render_fragment(fragment)
+
+      assert rendered =~ "* Task Title"
+      assert rendered =~ ":PROPERTIES:"
+      assert rendered =~ ":ID: 12345"
+      assert rendered =~ ":Author: John Doe"
+      assert rendered =~ ":END:"
+    end
+
+    test "renders section with metadata back to org format" do
+      text = """
+      * TODO Task
+        SCHEDULED: <2024-01-15 Mon>
+        DEADLINE: <2024-01-20 Sat>
+      """
+
+      fragment = FragmentParser.parse_fragment(text)
+      rendered = FragmentParser.render_fragment(fragment)
+
+      assert rendered =~ "* TODO Task"
+      assert rendered =~ "SCHEDULED: <2024-01-15 Mon>"
+      assert rendered =~ "DEADLINE: <2024-01-20 Sat>"
+    end
+
+    test "renders section with both properties and metadata" do
+      text = """
+      ** DONE [#B] Complex Task :project:
+         :PROPERTIES:
+         :ID: abc123
+         :END:
+         SCHEDULED: <2024-01-15 Mon>
+         CLOSED: [2024-01-18 Thu]
+      """
+
+      fragment = FragmentParser.parse_fragment(text)
+      rendered = FragmentParser.render_fragment(fragment)
+
+      # Check all components are present
+      assert rendered =~ "** DONE [#B] Complex Task :project:"
+      assert rendered =~ ":PROPERTIES:"
+      assert rendered =~ ":ID: abc123"
+      assert rendered =~ ":END:"
+      assert rendered =~ "SCHEDULED: <2024-01-15 Mon>"
+      assert rendered =~ "CLOSED: [2024-01-18 Thu]"
+    end
+
+    test "handles properties with special characters" do
+      text = """
+      * Web Project
+        :PROPERTIES:
+        :URL: https://example.com:8080/path?param=value
+        :Description: A project with "quotes" and special chars!
+        :END:
+      """
+
+      fragment = FragmentParser.parse_fragment(text)
+
+      assert fragment.content.properties == %{
+               "URL" => "https://example.com:8080/path?param=value",
+               "Description" => ~s[A project with "quotes" and special chars!]
+             }
+    end
+
+    test "handles metadata with time and warning periods" do
+      text = """
+      * Meeting
+        SCHEDULED: <2024-01-15 Mon 14:30>
+        DEADLINE: <2024-01-15 Mon 16:00 -30m>
+      """
+
+      fragment = FragmentParser.parse_fragment(text)
+
+      assert %Org.Timestamp{} = fragment.content.metadata.scheduled
+      assert fragment.content.metadata.scheduled.type == :active
+      assert fragment.content.metadata.scheduled.date == ~D[2024-01-15]
+      assert fragment.content.metadata.scheduled.day_name == "Mon"
+      assert fragment.content.metadata.scheduled.start_time == ~T[14:30:00]
+
+      assert %Org.Timestamp{} = fragment.content.metadata.deadline
+      assert fragment.content.metadata.deadline.type == :active
+      assert fragment.content.metadata.deadline.date == ~D[2024-01-15]
+      assert fragment.content.metadata.deadline.day_name == "Mon"
+      assert fragment.content.metadata.deadline.start_time == ~T[16:00:00]
+      assert fragment.content.metadata.deadline.warning == %{count: 30, unit: :month}
+    end
+
+    test "works with custom keywords and properties" do
+      custom_config =
+        FragmentParser.custom_keyword_config([
+          FragmentParser.workflow_sequence(["PROPOSAL", "APPROVED"], ["IMPLEMENTED"])
+        ])
+
+      text = """
+      * APPROVED Feature Request
+        :PROPERTIES:
+        :Requestor: Jane Smith
+        :Effort: 5d
+        :END:
+        SCHEDULED: <2024-02-01 Thu>
+      """
+
+      fragment = FragmentParser.parse_fragment(text, keyword_config: custom_config)
+
+      assert fragment.content.todo_keyword == "APPROVED"
+      assert fragment.content.title == "Feature Request"
+
+      assert fragment.content.properties == %{
+               "Requestor" => "Jane Smith",
+               "Effort" => "5d"
+             }
+
+      assert %Org.Timestamp{} = fragment.content.metadata.scheduled
+      assert fragment.content.metadata.scheduled.type == :active
+      assert fragment.content.metadata.scheduled.date == ~D[2024-02-01]
+      assert fragment.content.metadata.scheduled.day_name == "Thu"
+    end
+
+    test "handles empty property values" do
+      text = """
+      * Task
+        :PROPERTIES:
+        :Completed:
+        :Notes: Some notes here
+        :Empty: 
+        :END:
+      """
+
+      fragment = FragmentParser.parse_fragment(text)
+
+      assert fragment.content.properties == %{
+               "Completed" => "",
+               "Notes" => "Some notes here",
+               "Empty" => ""
+             }
+    end
+
+    test "ignores invalid property lines in drawer" do
+      text = """
+      * Task
+        :PROPERTIES:
+        :Valid: property
+        Not a property line
+        :Also: valid
+        :END:
+      """
+
+      fragment = FragmentParser.parse_fragment(text)
+
+      # Invalid lines should be skipped
+      assert fragment.content.properties == %{
+               "Valid" => "property",
+               "Also" => "valid"
+             }
+    end
+  end
 end
