@@ -36,7 +36,7 @@ You can see an example in [examples directory](./example)
 - [x] Write mode
 - [x] Parse Fragments
 - [x] Tags
-- [ ] Custom TODO keywords
+- [x] Custom TODO keywords
 - [ ] Metadata and Properties
 - [ ] Streaming of files
 

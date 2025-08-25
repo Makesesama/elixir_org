@@ -48,6 +48,95 @@ defmodule Org.FragmentParser do
           item_number: non_neg_integer() | nil
         }
 
+  @type keyword_sequence :: %{
+          type: :sequence | :type,
+          todo_keywords: [String.t()],
+          done_keywords: [String.t()]
+        }
+
+  @type keyword_config :: %{
+          sequences: [keyword_sequence()],
+          default_sequence: keyword_sequence()
+        }
+
+  @doc """
+  Returns the default TODO keyword configuration.
+
+  This matches org-mode's default behavior with TODO/DONE/CANCELLED keywords.
+  """
+  @spec default_keyword_config() :: keyword_config()
+  def default_keyword_config do
+    %{
+      sequences: [
+        %{
+          type: :sequence,
+          todo_keywords: ["TODO"],
+          done_keywords: ["DONE", "CANCELLED"]
+        }
+      ],
+      default_sequence: %{
+        type: :sequence,
+        todo_keywords: ["TODO"],
+        done_keywords: ["DONE", "CANCELLED"]
+      }
+    }
+  end
+
+  @doc """
+  Creates a workflow sequence keyword configuration.
+
+  ## Examples
+
+      iex> config = Org.FragmentParser.workflow_sequence(["TODO", "FEEDBACK", "VERIFY"], ["DONE", "DELEGATED"])
+      iex> config.type
+      :sequence
+  """
+  @spec workflow_sequence([String.t()], [String.t()]) :: keyword_sequence()
+  def workflow_sequence(todo_keywords, done_keywords) do
+    %{
+      type: :sequence,
+      todo_keywords: todo_keywords,
+      done_keywords: done_keywords
+    }
+  end
+
+  @doc """
+  Creates a type-based keyword configuration (for categorization/assignment).
+
+  ## Examples
+
+      iex> config = Org.FragmentParser.type_sequence(["Fred", "Sara", "Lucy"], ["DONE"])
+      iex> config.type
+      :type
+  """
+  @spec type_sequence([String.t()], [String.t()]) :: keyword_sequence()
+  def type_sequence(todo_keywords, done_keywords) do
+    %{
+      type: :type,
+      todo_keywords: todo_keywords,
+      done_keywords: done_keywords
+    }
+  end
+
+  @doc """
+  Creates a custom keyword configuration from multiple sequences.
+
+  ## Examples
+
+      iex> seq1 = Org.FragmentParser.workflow_sequence(["TODO"], ["DONE"])
+      iex> seq2 = Org.FragmentParser.workflow_sequence(["BUG", "INPROGRESS"], ["FIXED"])
+      iex> config = Org.FragmentParser.custom_keyword_config([seq1, seq2])
+      iex> length(config.sequences)
+      2
+  """
+  @spec custom_keyword_config([keyword_sequence()]) :: keyword_config()
+  def custom_keyword_config(sequences) when is_list(sequences) and length(sequences) > 0 do
+    %{
+      sequences: sequences,
+      default_sequence: hd(sequences)
+    }
+  end
+
   @doc """
   Parses a fragment of org-mode text with position tracking.
 
@@ -57,6 +146,7 @@ defmodule Org.FragmentParser do
   - `:start_position` - Starting position in the original document
   - `:context` - Parent context for proper parsing
   - `:preserve_whitespace` - Keep original whitespace (default: true)
+  - `:keyword_config` - Custom TODO keyword configuration (defaults to standard org-mode keywords)
 
   ## Examples
 
@@ -76,8 +166,9 @@ defmodule Org.FragmentParser do
     start_pos = opts[:start_position] || {1, 1}
     context = opts[:context] || %{}
     preserve_whitespace = Keyword.get(opts, :preserve_whitespace, true)
+    keyword_config = opts[:keyword_config] || default_keyword_config()
 
-    {content, end_pos} = parse_by_type(text, type, start_pos, context)
+    {content, end_pos} = parse_by_type(text, type, start_pos, context, keyword_config)
 
     %{
       type: type,
@@ -110,11 +201,14 @@ defmodule Org.FragmentParser do
         if String.trim(line) == "" do
           {acc_fragments, ctx}
         else
+          keyword_config = opts[:keyword_config] || default_keyword_config()
+
           fragment =
             parse_fragment(line,
               start_position: {line_num, 1},
               context: ctx,
-              preserve_whitespace: true
+              preserve_whitespace: true,
+              keyword_config: keyword_config
             )
 
           updated_ctx = update_context_from_fragment(ctx, fragment)
@@ -141,7 +235,8 @@ defmodule Org.FragmentParser do
       type: fragment.type,
       start_position: elem(fragment.range, 0),
       context: fragment.context,
-      preserve_whitespace: true
+      preserve_whitespace: true,
+      keyword_config: default_keyword_config()
     ]
 
     parse_fragment(new_text, opts)
@@ -182,11 +277,15 @@ defmodule Org.FragmentParser do
     end
   end
 
-  defp parse_by_type(text, :section, start_pos, context) do
-    # Parse section header using regex similar to lexer
+  defp parse_by_type(text, :section, start_pos, context, keyword_config) do
+    # Parse section header using regex with dynamic keywords
     trimmed = String.trim(text)
+    all_keywords = get_all_keywords(keyword_config)
+    keyword_pattern = build_keyword_regex_pattern(all_keywords)
 
-    case Regex.run(~r/^(\*+)\s*(?:(TODO|DONE|CANCELLED)\s+)?(?:\[#([ABC])\]\s+)?(.*)/, trimmed) do
+    regex = ~r/^(\*+)\s*(?:(#{keyword_pattern})\s+)?(?:\[#([ABC])\]\s+)?(.*)$/
+
+    case Regex.run(regex, trimmed) do
       [_, _stars, todo_keyword, priority, title_and_tags] ->
         {title, tags} = parse_title_and_tags(title_and_tags)
 
@@ -204,11 +303,11 @@ defmodule Org.FragmentParser do
 
       nil ->
         # Fallback to line parsing
-        parse_by_type(text, :line, start_pos, context)
+        parse_by_type(text, :line, start_pos, context, keyword_config)
     end
   end
 
-  defp parse_by_type(text, :content, start_pos, _context) do
+  defp parse_by_type(text, :content, start_pos, _context, _keyword_config) do
     # Try to parse as different content types
     content =
       cond do
@@ -229,14 +328,14 @@ defmodule Org.FragmentParser do
     {content, end_pos}
   end
 
-  defp parse_by_type(text, :text, start_pos, _context) do
+  defp parse_by_type(text, :text, start_pos, _context, _keyword_config) do
     # Parse formatted text
     formatted_text = Org.FormattedText.parse(text)
     end_pos = calculate_end_position(start_pos, text)
     {formatted_text, end_pos}
   end
 
-  defp parse_by_type(text, :line, start_pos, _context) do
+  defp parse_by_type(text, :line, start_pos, _context, _keyword_config) do
     # Simple line parsing - preserve as is
     end_pos = calculate_end_position(start_pos, text)
     {text, end_pos}
@@ -543,5 +642,29 @@ defmodule Org.FragmentParser do
   defp render_tags(tags) when is_list(tags) do
     tags_string = tags |> Enum.join(":")
     " :#{tags_string}:"
+  end
+
+  # Helper functions for keyword configuration
+
+  defp get_all_keywords(keyword_config) do
+    keyword_config.sequences
+    |> Enum.flat_map(fn seq -> seq.todo_keywords ++ seq.done_keywords end)
+    |> Enum.uniq()
+  end
+
+  defp build_keyword_regex_pattern(keywords) do
+    keywords
+    |> Enum.map_join("|", &Regex.escape/1)
+  end
+
+  defp find_keyword_sequence(keyword, keyword_config) do
+    Enum.find(keyword_config.sequences, fn seq ->
+      keyword in seq.todo_keywords or keyword in seq.done_keywords
+    end) || keyword_config.default_sequence
+  end
+
+  defp done_keyword?(keyword, keyword_config) do
+    seq = find_keyword_sequence(keyword, keyword_config)
+    keyword in seq.done_keywords
   end
 end

@@ -505,4 +505,117 @@ defmodule Org.FragmentParserTest do
       assert fragment.content.tags == []
     end
   end
+
+  describe "custom keyword support" do
+    test "parses section with custom workflow keywords" do
+      custom_config =
+        FragmentParser.custom_keyword_config([
+          FragmentParser.workflow_sequence(["TODO", "FEEDBACK", "VERIFY"], ["DONE", "DELEGATED"])
+        ])
+
+      text = "* FEEDBACK Important task"
+      fragment = FragmentParser.parse_fragment(text, keyword_config: custom_config)
+
+      assert fragment.type == :section
+      assert fragment.content.title == "Important task"
+      assert fragment.content.todo_keyword == "FEEDBACK"
+    end
+
+    test "parses section with custom type keywords" do
+      custom_config =
+        FragmentParser.custom_keyword_config([
+          FragmentParser.type_sequence(["Fred", "Sara", "Lucy"], ["DONE"])
+        ])
+
+      text = "** Sara [#B] Assigned task :work:"
+      fragment = FragmentParser.parse_fragment(text, keyword_config: custom_config)
+
+      assert fragment.type == :section
+      assert fragment.content.title == "Assigned task"
+      assert fragment.content.todo_keyword == "Sara"
+      assert fragment.content.priority == "B"
+      assert fragment.content.tags == ["work"]
+    end
+
+    test "parses section with multiple keyword sequences" do
+      seq1 = FragmentParser.workflow_sequence(["TODO"], ["DONE"])
+      seq2 = FragmentParser.workflow_sequence(["BUG", "INPROGRESS"], ["FIXED", "WONTFIX"])
+      custom_config = FragmentParser.custom_keyword_config([seq1, seq2])
+
+      # Test first sequence
+      text1 = "* TODO Regular task"
+      fragment1 = FragmentParser.parse_fragment(text1, keyword_config: custom_config)
+      assert fragment1.content.todo_keyword == "TODO"
+
+      # Test second sequence
+      text2 = "* BUG Critical issue"
+      fragment2 = FragmentParser.parse_fragment(text2, keyword_config: custom_config)
+      assert fragment2.content.todo_keyword == "BUG"
+
+      text3 = "* FIXED Bug resolved"
+      fragment3 = FragmentParser.parse_fragment(text3, keyword_config: custom_config)
+      assert fragment3.content.todo_keyword == "FIXED"
+    end
+
+    test "falls back to default keywords when custom not provided" do
+      text = "* TODO Standard task"
+      fragment = FragmentParser.parse_fragment(text)
+
+      assert fragment.content.todo_keyword == "TODO"
+    end
+
+    test "handles unknown keywords gracefully" do
+      custom_config =
+        FragmentParser.custom_keyword_config([
+          FragmentParser.workflow_sequence(["MYTODO"], ["MYDONE"])
+        ])
+
+      text = "* UNKNOWN Task with unknown keyword"
+      fragment = FragmentParser.parse_fragment(text, keyword_config: custom_config)
+
+      assert fragment.content.title == "UNKNOWN Task with unknown keyword"
+      assert fragment.content.todo_keyword == nil
+    end
+
+    test "renders section with custom keywords correctly" do
+      custom_config =
+        FragmentParser.custom_keyword_config([
+          FragmentParser.workflow_sequence(["REVIEW", "APPROVED"], ["MERGED", "REJECTED"])
+        ])
+
+      text = "** REVIEW [#A] Code changes :review:urgent:"
+      fragment = FragmentParser.parse_fragment(text, keyword_config: custom_config)
+      rendered = FragmentParser.render_fragment(fragment)
+
+      assert rendered == "** REVIEW [#A] Code changes :review:urgent:"
+    end
+  end
+
+  describe "keyword configuration helpers" do
+    test "workflow_sequence creates correct structure" do
+      config = FragmentParser.workflow_sequence(["TODO", "DOING"], ["DONE"])
+
+      assert config.type == :sequence
+      assert config.todo_keywords == ["TODO", "DOING"]
+      assert config.done_keywords == ["DONE"]
+    end
+
+    test "type_sequence creates correct structure" do
+      config = FragmentParser.type_sequence(["Alice", "Bob"], ["DONE"])
+
+      assert config.type == :type
+      assert config.todo_keywords == ["Alice", "Bob"]
+      assert config.done_keywords == ["DONE"]
+    end
+
+    test "custom_keyword_config creates configuration with multiple sequences" do
+      seq1 = FragmentParser.workflow_sequence(["TODO"], ["DONE"])
+      seq2 = FragmentParser.type_sequence(["Alice"], ["FINISHED"])
+
+      config = FragmentParser.custom_keyword_config([seq1, seq2])
+
+      assert length(config.sequences) == 2
+      assert config.default_sequence == seq1
+    end
+  end
 end
