@@ -386,4 +386,151 @@ defmodule Org do
   def to_org_string(doc) do
     Org.Writer.to_org_string(doc)
   end
+
+  # Fragment parsing functions
+
+  @doc """
+  Parses a fragment of org-mode text with position tracking.
+
+  Useful for incremental editing where you need to parse partial content
+  while preserving styling and position information.
+
+  ## Options
+
+  - `:type` - Expected fragment type (auto-detected if not provided)
+  - `:start_position` - Starting position in the original document
+  - `:context` - Parent context for proper parsing
+  - `:preserve_whitespace` - Keep original whitespace (default: true)
+
+  ## Examples
+
+      iex> fragment = Org.parse_fragment("** TODO [#A] Important task")
+      iex> fragment.content.title
+      "Important task"
+
+      iex> fragment = Org.parse_fragment("This is *bold* text.", type: :text)
+      iex> fragment.type
+      :text
+  """
+  @spec parse_fragment(String.t(), keyword()) :: Org.FragmentParser.fragment()
+  def parse_fragment(text, opts \\ []) do
+    Org.FragmentParser.parse_fragment(text, opts)
+  end
+
+  @doc """
+  Parses multiple fragments from text, typically separated by newlines.
+
+  ## Examples
+
+      iex> fragments = Org.parse_fragments("* Section 1\\n\\nSome content\\n\\n* Section 2")
+      iex> length(fragments)
+      3
+  """
+  @spec parse_fragments(String.t(), keyword()) :: [Org.FragmentParser.fragment()]
+  def parse_fragments(text, opts \\ []) do
+    Org.FragmentParser.parse_fragments(text, opts)
+  end
+
+  @doc """
+  Updates an existing fragment with new content while preserving position info.
+
+  ## Examples
+
+      iex> fragment = Org.parse_fragment("* Old title")
+      iex> updated = Org.update_fragment(fragment, "* New title")
+      iex> updated.content.title
+      "New title"
+  """
+  @spec update_fragment(Org.FragmentParser.fragment(), String.t()) :: Org.FragmentParser.fragment()
+  def update_fragment(fragment, new_text) do
+    Org.FragmentParser.update_fragment(fragment, new_text)
+  end
+
+  @doc """
+  Renders a fragment back to org-mode text format.
+
+  ## Examples
+
+      iex> fragment = Org.parse_fragment("** TODO Task")
+      iex> Org.render_fragment(fragment)
+      "** TODO Task"
+  """
+  @spec render_fragment(Org.FragmentParser.fragment()) :: String.t()
+  def render_fragment(fragment) do
+    Org.FragmentParser.render_fragment(fragment)
+  end
+
+  # Incremental parsing functions
+
+  @doc """
+  Creates a new incremental parse state for efficient document editing.
+
+  The incremental parser allows you to make changes to specific parts of
+  a document without re-parsing the entire text, which is much more efficient
+  for large documents or frequent edits.
+
+  ## Examples
+
+      iex> state = Org.new_incremental_parser("* Section 1\\n\\nContent\\n\\n* Section 2")
+      iex> state.document != nil
+      true
+  """
+  @spec new_incremental_parser(String.t()) :: Org.IncrementalParser.parse_state()
+  def new_incremental_parser(source_text) do
+    Org.IncrementalParser.new(source_text)
+  end
+
+  @doc """
+  Applies a text change to the incremental parse state.
+
+  Changes are queued and processed when `commit_incremental_changes/1` is called.
+
+  ## Examples
+
+      iex> state = Org.new_incremental_parser("* Old Title")
+      iex> change = %{
+      ...>   range: {{1, 3}, {1, 12}},
+      ...>   old_text: "Old Title",
+      ...>   new_text: "New Title"
+      ...> }
+      iex> updated_state = Org.apply_incremental_change(state, change)
+      iex> Org.has_pending_incremental_changes?(updated_state)
+      true
+  """
+  @spec apply_incremental_change(Org.IncrementalParser.parse_state(), Org.IncrementalParser.text_change()) ::
+          Org.IncrementalParser.parse_state()
+  def apply_incremental_change(state, change) do
+    Org.IncrementalParser.apply_change(state, change)
+  end
+
+  @doc """
+  Commits all pending incremental changes and re-parses affected document parts.
+
+  ## Examples
+
+      iex> state = Org.new_incremental_parser("* Section")
+      iex> change = %{range: {{1, 1}, {1, 9}}, old_text: "* Section", new_text: "* Updated"}
+      iex> state = Org.apply_incremental_change(state, change)
+      iex> committed_state = Org.commit_incremental_changes(state)
+      iex> committed_state.version > state.version
+      true
+  """
+  @spec commit_incremental_changes(Org.IncrementalParser.parse_state()) :: Org.IncrementalParser.parse_state()
+  def commit_incremental_changes(state) do
+    Org.IncrementalParser.commit_changes(state)
+  end
+
+  @doc """
+  Checks if there are pending incremental changes that haven't been committed.
+
+  ## Examples
+
+      iex> state = Org.new_incremental_parser("* Section")
+      iex> Org.has_pending_incremental_changes?(state)
+      false
+  """
+  @spec has_pending_incremental_changes?(Org.IncrementalParser.parse_state()) :: boolean()
+  def has_pending_incremental_changes?(state) do
+    Org.IncrementalParser.has_pending_changes?(state)
+  end
 end
