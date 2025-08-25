@@ -1,0 +1,93 @@
+%{
+  type: "document",
+  comments: ["+TITLE: Example Project", "+AUTHOR: Generator"],
+  sections: [
+    %{
+      priority: nil,
+      type: "section",
+      title: "Project Overview",
+      children: [],
+      contents: [
+        %{
+          type: "paragraph",
+          lines: ["This is an example project created by the generator."]
+        }
+      ],
+      todo_keyword: nil
+    },
+    %{
+      priority: nil,
+      type: "section",
+      title: "Development Phases",
+      children: [
+        %{
+          priority: nil,
+          type: "section",
+          title: "Planning",
+          children: [],
+          contents: [
+            %{type: "paragraph", lines: ["Initial planning completed."]}
+          ],
+          todo_keyword: "DONE"
+        },
+        %{
+          priority: nil,
+          type: "section",
+          title: "Implementation",
+          children: [],
+          contents: [
+            %{
+              type: "list",
+              items: [
+                %{
+                  type: "list_item",
+                  number: nil,
+                  ordered: false,
+                  indent: 0,
+                  children: [],
+                  content: "Core features"
+                },
+                %{
+                  type: "list_item",
+                  number: nil,
+                  ordered: false,
+                  indent: 0,
+                  children: [],
+                  content: "User interface"
+                },
+                %{
+                  type: "list_item",
+                  number: nil,
+                  ordered: false,
+                  indent: 0,
+                  children: [],
+                  content: "Testing"
+                }
+              ]
+            },
+            %{
+              type: "table",
+              rows: [
+                %{type: "table_row", cells: ["Metric", "Target", "Current"]},
+                %{type: "table_separator"},
+                %{type: "table_row", cells: ["Coverage", "90%", "45%"]},
+                %{type: "table_row", cells: ["Performance", "<100ms", "TBD"]}
+              ]
+            },
+            %{
+              type: "code_block",
+              lines: ["defmodule Example do",
+               "  def hello, do: \"Hello, World!\"", "end"],
+              details: "",
+              lang: "elixir"
+            }
+          ],
+          todo_keyword: "TODO"
+        }
+      ],
+      contents: [],
+      todo_keyword: nil
+    }
+  ],
+  contents: []
+}

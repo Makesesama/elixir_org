@@ -1,0 +1,24 @@
+#+TITLE: Example Project
+#+AUTHOR: Generator
+* Project Overview
+This is an example project created by the generator.
+
+* Development Phases
+** DONE Planning
+Initial planning completed.
+
+** TODO Implementation
+- Core features
+- User interface
+- Testing
+
+| Metric | Target | Current |
+|----------|
+| Coverage | 90% | 45% |
+| Performance | <100ms | TBD |
+
+#+BEGIN_SRC elixir
+defmodule Example do
+  def hello, do: "Hello, World!"
+end
+#+END_SRC

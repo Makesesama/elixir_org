@@ -33,7 +33,9 @@ You can see an example in [examples directory](./example)
 - [x] Text Formatting
 - [x] Links
 - [x] JSON Export
+- [x] Write mode
 - [ ] Custom TODO keywords
 - [ ] Tags
 - [ ] Metadata and Properties
 - [ ] Streaming of files
+- [ ] Parse Fragments

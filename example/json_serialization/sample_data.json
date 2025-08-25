@@ -1,0 +1,46 @@
+%{
+  type: "document",
+  comments: [],
+  sections: [
+    %{
+      priority: "A",
+      type: "section",
+      title: "Project Setup",
+      children: [
+        %{
+          priority: nil,
+          type: "section",
+          title: "Environment Setup",
+          children: [],
+          contents: [
+            %{type: "paragraph", lines: ["Development environment is ready."]},
+            %{
+              type: "table",
+              rows: [
+                %{type: "table_row", cells: ["Task", "Status", "Time"]},
+                %{type: "table_separator"},
+                %{type: "table_row", cells: ["Git", "Done", "1h"]},
+                %{type: "table_row", cells: ["IDE", "Done", "30m"]}
+              ]
+            },
+            %{
+              type: "code_block",
+              lines: ["mix new my_project", "cd my_project"],
+              details: "",
+              lang: "bash"
+            }
+          ],
+          todo_keyword: "DONE"
+        }
+      ],
+      contents: [
+        %{
+          type: "paragraph",
+          lines: ["Initial project configuration and setup."]
+        }
+      ],
+      todo_keyword: "TODO"
+    }
+  ],
+  contents: []
+}

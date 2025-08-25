@@ -275,4 +275,115 @@ defmodule Org do
   def encode_json(org_struct) do
     Org.JSONEncoder.encode(org_struct)
   end
+
+  # Write mode functions
+
+  @doc """
+  Adds a new section to the document at the specified path.
+
+  ## Examples
+
+      iex> doc = Org.load_string("* Parent")
+      iex> doc = Org.add_section(doc, ["Parent"], "Child", "TODO", "A")
+      iex> Org.NodeFinder.find_by_path(doc, ["Parent", "Child"]).title
+      "Child"
+  """
+  @spec add_section(Org.Document.t(), list(String.t()), String.t(), String.t() | nil, String.t() | nil) ::
+          Org.Document.t()
+  def add_section(doc, path, title, todo_keyword \\ nil, priority \\ nil) do
+    Org.Writer.add_section(doc, path, title, todo_keyword, priority)
+  end
+
+  @doc """
+  Adds content to the document at the specified path.
+
+  ## Examples
+
+      iex> doc = Org.load_string("* Section")
+      iex> para = %Org.Paragraph{lines: ["New content"]}
+      iex> doc = Org.add_content(doc, ["Section"], para)
+      iex> contents = Org.section(doc, ["Section"]).contents
+      iex> length(contents)
+      1
+  """
+  @spec add_content(Org.Document.t(), list(String.t()), Org.Content.t()) :: Org.Document.t()
+  def add_content(doc, path, content) do
+    Org.Writer.add_content(doc, path, content)
+  end
+
+  @doc """
+  Updates a node at the specified path using the given function.
+
+  ## Examples
+
+      iex> doc = Org.load_string("* Section")
+      iex> doc = Org.update_node(doc, ["Section"], fn s -> %{s | todo_keyword: "TODO"} end)
+      iex> Org.section(doc, ["Section"]).todo_keyword
+      "TODO"
+  """
+  @spec update_node(Org.Document.t(), list(String.t()), function()) :: Org.Document.t()
+  def update_node(doc, path, updater) do
+    Org.Writer.update_node(doc, path, updater)
+  end
+
+  @doc """
+  Removes a node at the specified path.
+
+  ## Examples
+
+      iex> doc = Org.load_string("* A\\n* B\\n* C")
+      iex> doc = Org.remove_node(doc, ["B"])
+      iex> titles = Enum.map(doc.sections, & &1.title)
+      iex> titles
+      ["A", "C"]
+  """
+  @spec remove_node(Org.Document.t(), list(String.t())) :: Org.Document.t()
+  def remove_node(doc, path) do
+    Org.Writer.remove_node(doc, path)
+  end
+
+  @doc """
+  Moves a node from one path to another.
+
+  ## Examples
+
+      iex> doc = Org.load_string("* A\\n** Child\\n* B")
+      iex> doc = Org.move_node(doc, ["A", "Child"], ["B"])
+      iex> Org.NodeFinder.find_by_path(doc, ["B", "Child"]) != nil
+      true
+  """
+  @spec move_node(Org.Document.t(), list(String.t()), list(String.t())) :: Org.Document.t()
+  def move_node(doc, from_path, to_path) do
+    Org.Writer.move_node(doc, from_path, to_path)
+  end
+
+  @doc """
+  Finds a node at the specified path in the document.
+
+  ## Examples
+
+      iex> doc = Org.load_string("* Parent\\n** Child")
+      iex> node = Org.find_node(doc, ["Parent", "Child"])
+      iex> node.title
+      "Child"
+  """
+  @spec find_node(Org.Document.t(), list(String.t())) :: any()
+  def find_node(doc, path) do
+    Org.NodeFinder.find_by_path(doc, path)
+  end
+
+  @doc """
+  Converts an Org document back to org-mode text format.
+
+  ## Examples
+
+      iex> doc = Org.load_string("* Section\\nContent")
+      iex> org_text = Org.to_org_string(doc)
+      iex> org_text =~ "* Section"
+      true
+  """
+  @spec to_org_string(Org.Document.t()) :: String.t()
+  def to_org_string(doc) do
+    Org.Writer.to_org_string(doc)
+  end
 end
