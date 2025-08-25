@@ -32,8 +32,8 @@ You can see an example in [examples directory](./example)
 - [x] Lists (ordered and unordered, with nesting)
 - [x] Text Formatting
 - [x] Links
+- [x] JSON Export
 - [ ] Custom TODO keywords
 - [ ] Tags
 - [ ] Metadata and Properties
-- [ ] Export Formats
 - [ ] Streaming of files

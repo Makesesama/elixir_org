@@ -232,4 +232,47 @@ defmodule Org do
   defp extract_sections_by_priority(%Org.Section{children: children}, target_priority) do
     Enum.flat_map(children, &extract_sections_by_priority(&1, target_priority))
   end
+
+  @doc """
+  Converts an Org document or any Org struct to a JSON-encodable map.
+
+  This function transforms Org structures into plain Elixir maps that can be
+  easily serialized to JSON using any JSON library.
+
+  ## Examples
+
+      iex> doc = Org.load_string("* TODO Task\\nDescription")
+      iex> json_map = Org.to_json_map(doc)
+      iex> json_map.type
+      "document"
+      iex> List.first(json_map.sections).todo_keyword
+      "TODO"
+
+      iex> para = %Org.Paragraph{lines: ["Hello *world*"]}
+      iex> Org.to_json_map(para)
+      %{type: "paragraph", lines: ["Hello *world*"]}
+  """
+  @spec to_json_map(any()) :: map()
+  def to_json_map(org_struct) do
+    Org.JSONEncodable.to_json_map(org_struct)
+  end
+
+  @doc """
+  Encodes an Org document or any Org struct to a JSON-encodable map.
+
+  Alias for `to_json_map/1` using the encoder module directly.
+
+  ## Examples
+
+      iex> doc = Org.load_string("#+COMMENT: Test comment\\n* Section")
+      iex> encoded = Org.encode_json(doc)
+      iex> encoded.type
+      "document"
+      iex> encoded.comments
+      ["+COMMENT: Test comment"]
+  """
+  @spec encode_json(any()) :: map()
+  def encode_json(org_struct) do
+    Org.JSONEncoder.encode(org_struct)
+  end
 end

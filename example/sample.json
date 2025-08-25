@@ -1,0 +1,397 @@
+%{
+  type: "document",
+  comments: ["+TITLE: Project Management", "+AUTHOR: John Doe"],
+  contents: [],
+  sections: [
+    %{
+      priority: "A",
+      type: "section",
+      title: "Project Setup",
+      contents: [
+        %{
+          type: "paragraph",
+          lines: [
+            %{
+              type: "formatted_text",
+              spans: [
+                "Setup the initial project structure and dependencies. This is a ",
+                %{type: "span", format: :bold, content: "critical"},
+                " task that requires ",
+                %{type: "span", format: :italic, content: "immediate attention"},
+                " and ",
+                %{type: "span", format: :underline, content: "careful planning"},
+                "."
+              ]
+            }
+          ]
+        }
+      ],
+      children: [
+        %{
+          priority: "B",
+          type: "section",
+          title: "Repository Creation",
+          contents: [
+            %{
+              type: "paragraph",
+              lines: [
+                %{
+                  type: "formatted_text",
+                  spans: [
+                    "Created the git repository and initial structure. Used ",
+                    %{type: "span", format: :code, content: "git init"},
+                    " command and configured ",
+                    %{type: "span", format: :verbatim, content: ".gitignore"},
+                    " file properly."
+                  ]
+                }
+              ]
+            }
+          ],
+          children: [],
+          todo_keyword: "DONE"
+        },
+        %{
+          priority: "A",
+          type: "section",
+          title: "Dependencies",
+          contents: [
+            %{
+              type: "paragraph",
+              lines: [
+                %{
+                  type: "formatted_text",
+                  spans: [
+                    "Install required dependencies (",
+                    %{type: "span", format: :bold, content: "high priority"},
+                    "):"
+                  ]
+                }
+              ]
+            },
+            %{
+              type: "list",
+              items: [
+                %{
+                  type: "list_item",
+                  number: nil,
+                  ordered: false,
+                  indent: 0,
+                  children: [],
+                  content: "Database setup ([[https://postgresql.org][PostgreSQL]] recommended)"
+                },
+                %{
+                  type: "list_item",
+                  number: nil,
+                  ordered: false,
+                  indent: 0,
+                  children: [],
+                  content: "Web framework ([[https://phoenixframework.org][_Phoenix_]] or [[https://rubyonrails.org][_Rails_]])"
+                },
+                %{
+                  type: "list_item",
+                  number: nil,
+                  ordered: false,
+                  indent: 0,
+                  children: [],
+                  content: "Testing tools (=pytest= or [[https://hexdocs.pm/ex_unit/ExUnit.html][~ExUnit~]])"
+                }
+              ]
+            }
+          ],
+          children: [],
+          todo_keyword: "TODO"
+        }
+      ],
+      todo_keyword: "TODO"
+    },
+    %{
+      priority: nil,
+      type: "section",
+      title: "Documentation",
+      contents: [
+        %{
+          type: "paragraph",
+          lines: [
+            %{
+              type: "formatted_text",
+              spans: [
+                "Write comprehensive documentation for the project. ",
+                %{
+                  type: "span",
+                  format: :strikethrough,
+                  content: "Old approach was insufficient"
+                },
+                " but now we have ",
+                %{type: "span", format: :bold, content: "complete"},
+                " ",
+                %{type: "span", format: :italic, content: "API documentation"},
+                " with ",
+                %{type: "span", format: :underline, content: "proper examples"},
+                " and ",
+                %{type: "span", format: :code, content: "code samples"},
+                ". Visit ",
+                %{
+                  type: "link",
+                  description: nil,
+                  url: "https://docs.example.com"
+                },
+                " for the latest docs."
+              ]
+            }
+          ]
+        },
+        %{
+          type: "table",
+          rows: [
+            %{type: "table_row", cells: ["Feature", "Status", "Priority"]},
+            %{type: "table_separator"},
+            %{type: "table_row", cells: ["Auth", "Planning", "High"]},
+            %{type: "table_row", cells: ["Dashboard", "Design", "Medium"]},
+            %{type: "table_row", cells: ["Reports", "TODO", "Low"]}
+          ]
+        }
+      ],
+      children: [],
+      todo_keyword: "DONE"
+    },
+    %{
+      priority: nil,
+      type: "section",
+      title: "Code Examples",
+      contents: [
+        %{type: "paragraph", lines: ["Here's a simple function:"]},
+        %{
+          type: "code_block",
+          lines: ["def hello(name) do", "  IO.puts(\"Hello, \#{name}!\")",
+           "end"],
+          details: "",
+          lang: "elixir"
+        }
+      ],
+      children: [
+        %{
+          priority: nil,
+          type: "section",
+          title: "Implementation Notes",
+          contents: [
+            %{
+              type: "paragraph",
+              lines: [
+                %{
+                  type: "formatted_text",
+                  spans: [
+                    "The function should handle edge cases like ",
+                    %{type: "span", format: :bold, content: "empty names"},
+                    ", ",
+                    %{type: "span", format: :italic, content: "nil values"},
+                    ", and ",
+                    %{
+                      type: "span",
+                      format: :underline,
+                      content: "special characters"
+                    },
+                    ". Use ",
+                    %{type: "span", format: :code, content: "String.trim()"},
+                    " to clean input and ",
+                    %{type: "span", format: :verbatim, content: "Logger.warn()"},
+                    " for debugging. See ",
+                    %{
+                      type: "link",
+                      description: "String documentation",
+                      url: "https://hexdocs.pm/elixir/String.html"
+                    },
+                    " for more details."
+                  ]
+                }
+              ]
+            }
+          ],
+          children: [],
+          todo_keyword: nil
+        }
+      ],
+      todo_keyword: nil
+    },
+    %{
+      priority: nil,
+      type: "section",
+      title: "Future Plans",
+      contents: [],
+      children: [
+        %{
+          priority: nil,
+          type: "section",
+          title: "Development Tasks",
+          contents: [
+            %{
+              type: "list",
+              items: [
+                %{
+                  type: "list_item",
+                  number: nil,
+                  ordered: false,
+                  indent: 0,
+                  children: [],
+                  content: "*Mobile app development* (/high impact/)"
+                },
+                %{
+                  type: "list_item",
+                  number: nil,
+                  ordered: false,
+                  indent: 2,
+                  children: [],
+                  content: "_iOS implementation_ using [[https://swift.org][=Swift=]]"
+                },
+                %{
+                  type: "list_item",
+                  number: nil,
+                  ordered: false,
+                  indent: 2,
+                  children: [],
+                  content: "_Android implementation_ using [[https://kotlinlang.org][~Kotlin~]]"
+                },
+                %{
+                  type: "list_item",
+                  number: nil,
+                  ordered: false,
+                  indent: 0,
+                  children: [],
+                  content: "*API improvements* (+legacy code cleanup+)"
+                },
+                %{
+                  type: "list_item",
+                  number: nil,
+                  ordered: false,
+                  indent: 2,
+                  children: [],
+                  content: "/Authentication upgrade/ to [[https://oauth.net/2/][=OAuth2=]]"
+                },
+                %{
+                  type: "list_item",
+                  number: nil,
+                  ordered: false,
+                  indent: 2,
+                  children: [],
+                  content: "_Rate limiting_ with [[https://redis.io][~Redis~]] backend"
+                },
+                %{
+                  type: "list_item",
+                  number: nil,
+                  ordered: false,
+                  indent: 0,
+                  children: [],
+                  content: "*Performance optimization* (/critical for scaling/)"
+                }
+              ]
+            }
+          ],
+          children: [],
+          todo_keyword: nil
+        },
+        %{
+          priority: nil,
+          type: "section",
+          title: "Priority List",
+          contents: [
+            %{
+              type: "list",
+              items: [
+                %{
+                  type: "list_item",
+                  number: 1,
+                  ordered: true,
+                  indent: 0,
+                  children: [],
+                  content: "*Security audit* (+previous audit failed+)"
+                },
+                %{
+                  type: "list_item",
+                  number: 2,
+                  ordered: true,
+                  indent: 0,
+                  children: [],
+                  content: "/User experience improvements/ (_essential for retention_)"
+                },
+                %{
+                  type: "list_item",
+                  number: nil,
+                  ordered: false,
+                  indent: 3,
+                  children: [],
+                  content: "_Better navigation_ using =breadcrumbs="
+                },
+                %{
+                  type: "list_item",
+                  number: nil,
+                  ordered: false,
+                  indent: 3,
+                  children: [],
+                  content: "*Faster loading times* with ~caching~"
+                },
+                %{
+                  type: "list_item",
+                  number: 3,
+                  ordered: true,
+                  indent: 0,
+                  children: [],
+                  content: "_Documentation updates_ (/quarterly review/)"
+                }
+              ]
+            }
+          ],
+          children: [],
+          todo_keyword: nil
+        }
+      ],
+      todo_keyword: nil
+    },
+    %{
+      priority: nil,
+      type: "section",
+      title: "Resources",
+      contents: [
+        %{type: "paragraph", lines: ["Useful links for development:"]},
+        %{
+          type: "list",
+          items: [
+            %{
+              type: "list_item",
+              number: nil,
+              ordered: false,
+              indent: 0,
+              children: [],
+              content: "Official Elixir website: https://elixir-lang.org"
+            },
+            %{
+              type: "list_item",
+              number: nil,
+              ordered: false,
+              indent: 0,
+              children: [],
+              content: "Hexdocs for packages: https://hexdocs.pm"
+            },
+            %{
+              type: "list_item",
+              number: nil,
+              ordered: false,
+              indent: 0,
+              children: [],
+              content: "Community discussions at [[https://elixirforum.com][Elixir Forum]]"
+            },
+            %{
+              type: "list_item",
+              number: nil,
+              ordered: false,
+              indent: 0,
+              children: [],
+              content: "Internal project notes: [[#section-name]]"
+            }
+          ]
+        }
+      ],
+      children: [],
+      todo_keyword: nil
+    }
+  ]
+}
