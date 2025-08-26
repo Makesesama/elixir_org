@@ -1405,6 +1405,212 @@ defmodule Org do
     Enum.map(occurrences, &{section, &1})
   end
 
+  # ============================================================================
+  # Property Drawer Management Functions
+  # ============================================================================
+
+  @doc """
+  Adds a single property to a section's property drawer.
+
+  Creates the property drawer if it doesn't exist, or adds to existing properties.
+
+  ## Examples
+
+      iex> doc = Org.load_string("* Task")
+      iex> doc = Org.add_property(doc, ["Task"], "ID", "12345")
+      iex> task = Org.section(doc, ["Task"])
+      iex> task.properties["ID"]
+      "12345"
+  """
+  @spec add_property(Org.Document.t(), [String.t()], String.t(), String.t()) :: Org.Document.t()
+  def add_property(doc, path, key, value) do
+    Org.Writer.update_node(doc, path, fn
+      %Org.Section{} = section ->
+        current_properties = section.properties || %{}
+        %{section | properties: Map.put(current_properties, key, value)}
+
+      _ ->
+        raise ArgumentError, "Can only add properties to sections"
+    end)
+  end
+
+  @doc """
+  Sets multiple properties on a section, replacing existing properties.
+
+  ## Examples
+
+      iex> doc = Org.load_string("* Task")
+      iex> properties = %{"ID" => "12345", "CATEGORY" => "work"}
+      iex> doc = Org.set_properties(doc, ["Task"], properties)
+      iex> task = Org.section(doc, ["Task"])
+      iex> task.properties["ID"]
+      "12345"
+      iex> task.properties["CATEGORY"]
+      "work"
+  """
+  @spec set_properties(Org.Document.t(), [String.t()], %{String.t() => String.t()}) :: Org.Document.t()
+  def set_properties(doc, path, properties) when is_map(properties) do
+    Org.Writer.update_node(doc, path, fn
+      %Org.Section{} = section ->
+        %{section | properties: properties}
+
+      _ ->
+        raise ArgumentError, "Can only set properties on sections"
+    end)
+  end
+
+  @doc """
+  Updates properties on a section by merging with existing properties.
+
+  ## Examples
+
+      iex> doc = Org.load_string("* Task")
+      iex> doc = Org.add_property(doc, ["Task"], "ID", "12345")
+      iex> doc = Org.update_properties(doc, ["Task"], %{"CATEGORY" => "work", "EFFORT" => "2h"})
+      iex> task = Org.section(doc, ["Task"])
+      iex> task.properties["ID"]
+      "12345"
+      iex> task.properties["CATEGORY"]
+      "work"
+  """
+  @spec update_properties(Org.Document.t(), [String.t()], %{String.t() => String.t()}) :: Org.Document.t()
+  def update_properties(doc, path, new_properties) when is_map(new_properties) do
+    Org.Writer.update_node(doc, path, fn
+      %Org.Section{} = section ->
+        current_properties = section.properties || %{}
+        %{section | properties: Map.merge(current_properties, new_properties)}
+
+      _ ->
+        raise ArgumentError, "Can only update properties on sections"
+    end)
+  end
+
+  @doc """
+  Removes a property from a section's property drawer.
+
+  ## Examples
+
+      iex> doc = Org.load_string("* Task")
+      iex> doc = Org.add_property(doc, ["Task"], "ID", "12345")
+      iex> doc = Org.remove_property(doc, ["Task"], "ID")
+      iex> task = Org.section(doc, ["Task"])
+      iex> task.properties["ID"]
+      nil
+  """
+  @spec remove_property(Org.Document.t(), [String.t()], String.t()) :: Org.Document.t()
+  def remove_property(doc, path, key) do
+    Org.Writer.update_node(doc, path, fn
+      %Org.Section{} = section ->
+        current_properties = section.properties || %{}
+        %{section | properties: Map.delete(current_properties, key)}
+
+      _ ->
+        raise ArgumentError, "Can only remove properties from sections"
+    end)
+  end
+
+  @doc """
+  Adds metadata (SCHEDULED, DEADLINE, CLOSED) to a section.
+
+  ## Examples
+
+      iex> doc = Org.load_string("* Task")
+      iex> {:ok, timestamp} = Org.Timestamp.parse("<2024-01-15 Mon>")
+      iex> doc = Org.add_metadata(doc, ["Task"], :scheduled, timestamp)
+      iex> task = Org.section(doc, ["Task"])
+      iex> task.metadata.scheduled.date
+      ~D[2024-01-15]
+  """
+  @spec add_metadata(Org.Document.t(), [String.t()], atom(), Org.Timestamp.t()) :: Org.Document.t()
+  def add_metadata(doc, path, key, timestamp) when key in [:scheduled, :deadline, :closed] do
+    Org.Writer.update_node(doc, path, fn
+      %Org.Section{} = section ->
+        current_metadata = section.metadata || %{}
+        %{section | metadata: Map.put(current_metadata, key, timestamp)}
+
+      _ ->
+        raise ArgumentError, "Can only add metadata to sections"
+    end)
+  end
+
+  @doc """
+  Sets multiple metadata entries on a section, replacing existing metadata.
+
+  ## Examples
+
+      iex> doc = Org.load_string("* Task")
+      iex> {:ok, scheduled} = Org.Timestamp.parse("<2024-01-15 Mon>")
+      iex> {:ok, deadline} = Org.Timestamp.parse("<2024-01-20 Sat>")
+      iex> metadata = %{scheduled: scheduled, deadline: deadline}
+      iex> doc = Org.set_metadata(doc, ["Task"], metadata)
+      iex> task = Org.section(doc, ["Task"])
+      iex> task.metadata.scheduled.date
+      ~D[2024-01-15]
+  """
+  @spec set_metadata(Org.Document.t(), [String.t()], %{atom() => Org.Timestamp.t()}) :: Org.Document.t()
+  def set_metadata(doc, path, metadata) when is_map(metadata) do
+    Org.Writer.update_node(doc, path, fn
+      %Org.Section{} = section ->
+        %{section | metadata: metadata}
+
+      _ ->
+        raise ArgumentError, "Can only set metadata on sections"
+    end)
+  end
+
+  @doc """
+  Updates metadata on a section by merging with existing metadata.
+
+  ## Examples
+
+      iex> doc = Org.load_string("* Task")
+      iex> {:ok, scheduled} = Org.Timestamp.parse("<2024-01-15 Mon>")
+      iex> doc = Org.add_metadata(doc, ["Task"], :scheduled, scheduled)
+      iex> {:ok, deadline} = Org.Timestamp.parse("<2024-01-20 Sat>")
+      iex> doc = Org.update_metadata(doc, ["Task"], %{deadline: deadline})
+      iex> task = Org.section(doc, ["Task"])
+      iex> task.metadata.scheduled.date
+      ~D[2024-01-15]
+      iex> task.metadata.deadline.date
+      ~D[2024-01-20]
+  """
+  @spec update_metadata(Org.Document.t(), [String.t()], %{atom() => Org.Timestamp.t()}) :: Org.Document.t()
+  def update_metadata(doc, path, new_metadata) when is_map(new_metadata) do
+    Org.Writer.update_node(doc, path, fn
+      %Org.Section{} = section ->
+        current_metadata = section.metadata || %{}
+        %{section | metadata: Map.merge(current_metadata, new_metadata)}
+
+      _ ->
+        raise ArgumentError, "Can only update metadata on sections"
+    end)
+  end
+
+  @doc """
+  Removes metadata from a section.
+
+  ## Examples
+
+      iex> doc = Org.load_string("* Task")
+      iex> {:ok, timestamp} = Org.Timestamp.parse("<2024-01-15 Mon>")
+      iex> doc = Org.add_metadata(doc, ["Task"], :scheduled, timestamp)
+      iex> doc = Org.remove_metadata(doc, ["Task"], :scheduled)
+      iex> task = Org.section(doc, ["Task"])
+      iex> task.metadata[:scheduled]
+      nil
+  """
+  @spec remove_metadata(Org.Document.t(), [String.t()], atom()) :: Org.Document.t()
+  def remove_metadata(doc, path, key) do
+    Org.Writer.update_node(doc, path, fn
+      %Org.Section{} = section ->
+        current_metadata = section.metadata || %{}
+        %{section | metadata: Map.delete(current_metadata, key)}
+
+      _ ->
+        raise ArgumentError, "Can only remove metadata from sections"
+    end)
+  end
+
   # Helper functions for repeater functionality
 
   defp get_repeating_timestamps(section) do

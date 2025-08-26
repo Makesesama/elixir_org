@@ -44,7 +44,7 @@ You can see an example in [examples directory](./example)
 - [x] Repeater Intervals
 - [x] Tag Inheritance (computed effective tags)
 - [x] Enhanced Priority support
-- [ ] ? drawers
+- [x] Property Drawer Management
 - [x] Handling org-directories and multi file parsing
 - [ ] Streaming of files
 - [ ] Denote Support
