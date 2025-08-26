@@ -533,4 +533,687 @@ defmodule Org do
   def has_pending_incremental_changes?(state) do
     Org.IncrementalParser.has_pending_changes?(state)
   end
+
+  # ============================================================================
+  # Planning and Scheduling Functions
+  # ============================================================================
+
+  @doc """
+  Adds a SCHEDULED timestamp to a section.
+
+  ## Examples
+
+      iex> doc = Org.load_string("* TODO Task")
+      iex> {:ok, timestamp} = Org.Timestamp.parse("<2024-01-15 Mon 09:00>")
+      iex> doc = Org.schedule(doc, ["Task"], timestamp)
+      iex> task = Org.section(doc, ["Task"])
+      iex> task.metadata.scheduled.date
+      ~D[2024-01-15]
+  """
+  @spec schedule(Org.Document.t(), [String.t()], Org.Timestamp.t()) :: Org.Document.t()
+  def schedule(doc, path, timestamp) do
+    Org.Writer.schedule(doc, path, timestamp)
+  end
+
+  @doc """
+  Adds a DEADLINE timestamp to a section.
+
+  ## Examples
+
+      iex> doc = Org.load_string("* TODO Task")
+      iex> {:ok, timestamp} = Org.Timestamp.parse("<2024-01-20 Sat>")
+      iex> doc = Org.deadline(doc, ["Task"], timestamp)
+      iex> task = Org.section(doc, ["Task"])
+      iex> task.metadata.deadline.date
+      ~D[2024-01-20]
+  """
+  @spec deadline(Org.Document.t(), [String.t()], Org.Timestamp.t()) :: Org.Document.t()
+  def deadline(doc, path, timestamp) do
+    Org.Writer.deadline(doc, path, timestamp)
+  end
+
+  @doc """
+  Marks a task as completed with a CLOSED timestamp.
+
+  ## Examples
+
+      iex> doc = Org.load_string("* TODO Task")
+      iex> doc = Org.complete_task(doc, ["Task"])
+      iex> task = Org.section(doc, ["Task"])
+      iex> task.todo_keyword
+      "DONE"
+      iex> task.metadata.closed != nil
+      true
+  """
+  @spec complete_task(Org.Document.t(), [String.t()], DateTime.t() | nil) :: Org.Document.t()
+  def complete_task(doc, path, completion_time \\ nil) do
+    Org.Writer.complete_task(doc, path, completion_time)
+  end
+
+  @doc """
+  Creates a new section with scheduling information.
+
+  ## Examples
+
+      iex> doc = Org.load_string("* Parent")
+      iex> {:ok, scheduled} = Org.Timestamp.parse("<2024-01-15 Mon 09:00>")
+      iex> doc = Org.add_scheduled_task(doc, ["Parent"], "Important Task", "TODO", "A", scheduled)
+      iex> task = Org.section(doc, ["Parent", "Important Task"])
+      iex> task.metadata.scheduled.date
+      ~D[2024-01-15]
+  """
+  @spec add_scheduled_task(
+          Org.Document.t(),
+          [String.t()],
+          String.t(),
+          String.t() | nil,
+          String.t() | nil,
+          Org.Timestamp.t() | nil,
+          Org.Timestamp.t() | nil
+        ) :: Org.Document.t()
+  def add_scheduled_task(doc, path, title, todo_keyword \\ "TODO", priority \\ nil, scheduled \\ nil, deadline \\ nil) do
+    Org.Writer.add_scheduled_section(doc, path, title, todo_keyword, priority, scheduled, deadline)
+  end
+
+  @doc """
+  Removes scheduling information from a section.
+
+  ## Examples
+
+      iex> doc = Org.load_string("* Task\\n  SCHEDULED: <2024-01-15 Mon>")
+      iex> doc = Org.unschedule(doc, ["Task"])
+      iex> task = Org.section(doc, ["Task"])
+      iex> Map.get(task.metadata, :scheduled)
+      nil
+  """
+  @spec unschedule(Org.Document.t(), [String.t()]) :: Org.Document.t()
+  def unschedule(doc, path) do
+    Org.Writer.unschedule(doc, path)
+  end
+
+  @doc """
+  Extracts all sections that are scheduled.
+
+  ## Examples
+
+      iex> doc = Org.load_string("* TODO Task 1\\nSCHEDULED: <2024-01-15 Mon>\\n* Task 2\\n* TODO Task 3\\nSCHEDULED: <2024-01-20 Sat>")
+      iex> scheduled = Org.scheduled_items(doc)
+      iex> length(scheduled)
+      2
+  """
+  @spec scheduled_items(Org.Document.t() | Org.Section.t()) :: [Org.Section.t()]
+  def scheduled_items(doc_or_section) do
+    extract_sections_with_metadata(doc_or_section, :scheduled)
+  end
+
+  @doc """
+  Extracts all sections that have deadlines.
+
+  ## Examples
+
+      iex> doc = Org.load_string("* TODO Task 1\\nDEADLINE: <2024-01-15 Mon>\\n* Task 2\\n* TODO Task 3\\nDEADLINE: <2024-01-20 Sat>")
+      iex> deadlines = Org.deadline_items(doc)
+      iex> length(deadlines)
+      2
+  """
+  @spec deadline_items(Org.Document.t() | Org.Section.t()) :: [Org.Section.t()]
+  def deadline_items(doc_or_section) do
+    extract_sections_with_metadata(doc_or_section, :deadline)
+  end
+
+  @doc """
+  Extracts all sections that are closed/completed.
+
+  ## Examples
+
+      iex> doc = Org.load_string("* DONE Task 1\\nCLOSED: [2024-01-15 Mon]\\n* TODO Task 2\\n* DONE Task 3\\nCLOSED: [2024-01-20 Sat]")
+      iex> completed = Org.closed_items(doc)
+      iex> length(completed)
+      2
+  """
+  @spec closed_items(Org.Document.t() | Org.Section.t()) :: [Org.Section.t()]
+  def closed_items(doc_or_section) do
+    extract_sections_with_metadata(doc_or_section, :closed)
+  end
+
+  @doc """
+  Extracts sections scheduled for today.
+
+  ## Examples
+
+      iex> doc = Org.load_string("* TODO Task\\n  SCHEDULED: <2024-01-15 Mon>")
+      iex> today_tasks = Org.agenda_items(doc, ~D[2024-01-15])
+      iex> length(today_tasks)
+      1
+  """
+  @spec agenda_items(Org.Document.t() | Org.Section.t(), Date.t()) :: [Org.Section.t()]
+  def agenda_items(doc_or_section, date \\ Date.utc_today()) do
+    doc_or_section
+    |> scheduled_items()
+    |> Enum.filter(fn section ->
+      case section.metadata[:scheduled] do
+        %Org.Timestamp{date: scheduled_date} -> Date.compare(scheduled_date, date) == :eq
+        _ -> false
+      end
+    end)
+  end
+
+  @doc """
+  Extracts overdue tasks (past deadline and not completed).
+
+  ## Examples
+
+      iex> doc = Org.load_string("* TODO Task\\n  DEADLINE: <2024-01-10 Wed>")
+      iex> overdue = Org.overdue_items(doc, ~D[2024-01-15])
+      iex> length(overdue)
+      1
+  """
+  @spec overdue_items(Org.Document.t() | Org.Section.t(), Date.t()) :: [Org.Section.t()]
+  def overdue_items(doc_or_section, today \\ Date.utc_today()) do
+    doc_or_section
+    |> deadline_items()
+    |> Enum.filter(fn section ->
+      section.todo_keyword != "DONE" &&
+        case section.metadata[:deadline] do
+          %Org.Timestamp{date: deadline_date} -> Date.compare(deadline_date, today) == :lt
+          _ -> false
+        end
+    end)
+  end
+
+  # Helper function to extract sections with specific metadata
+  defp extract_sections_with_metadata(%Org.Document{sections: sections}, metadata_key) do
+    Enum.flat_map(sections, &extract_sections_with_metadata(&1, metadata_key))
+  end
+
+  defp extract_sections_with_metadata(%Org.Section{} = section, metadata_key) do
+    current = if section.metadata[metadata_key], do: [section], else: []
+    children = Enum.flat_map(section.children, &extract_sections_with_metadata(&1, metadata_key))
+    current ++ children
+  end
+
+  # ============================================================================
+  # Workflow Configuration and Management Functions
+  # ============================================================================
+
+  @doc """
+  Creates a TODO workflow sequence configuration.
+
+  ## Examples
+
+      iex> workflow = Org.create_todo_sequence(["TODO", "DOING"], ["DONE"])
+      iex> workflow.active
+      ["TODO", "DOING"]
+      iex> workflow.done
+      ["DONE"]
+  """
+  @spec create_todo_sequence([String.t()], [String.t()]) :: Org.Writer.todo_sequence()
+  def create_todo_sequence(active_states, done_states) do
+    Org.Writer.create_todo_sequence(active_states, done_states)
+  end
+
+  @doc """
+  Creates a comprehensive workflow configuration with multiple sequences.
+
+  ## Examples
+
+      iex> basic = Org.create_todo_sequence(["TODO"], ["DONE"])
+      iex> dev = Org.create_todo_sequence(["TODO", "INPROGRESS", "REVIEW"], ["DONE", "CANCELLED"])
+      iex> config = Org.create_workflow_config([basic, dev])
+      iex> length(config.sequences)
+      2
+  """
+  @spec create_workflow_config([Org.Writer.todo_sequence()], Org.Writer.todo_sequence() | nil) ::
+          Org.Writer.workflow_config()
+  def create_workflow_config(sequences, default_sequence \\ nil) do
+    default_sequence = default_sequence || List.first(sequences) || Org.Writer.create_todo_sequence(["TODO"], ["DONE"])
+    Org.Writer.create_workflow_config(sequences, default_sequence)
+  end
+
+  @doc """
+  Gets the default workflow configuration (TODO -> DONE).
+
+  ## Examples
+
+      iex> config = Org.default_workflow_config()
+      iex> config.default_sequence.active
+      ["TODO"]
+      iex> config.default_sequence.done
+      ["DONE"]
+  """
+  @spec default_workflow_config() :: Org.Writer.workflow_config()
+  def default_workflow_config do
+    Org.Writer.default_workflow_config()
+  end
+
+  @doc """
+  Cycles a TODO keyword to the next state in its workflow sequence.
+
+  ## Examples
+
+      iex> doc = Org.load_string("* TODO Task")
+      iex> doc = Org.cycle_todo(doc, ["Task"])
+      iex> task = Org.section(doc, ["Task"])
+      iex> task.todo_keyword
+      "DONE"
+
+      iex> doc = Org.load_string("* DONE Task")
+      iex> doc = Org.cycle_todo(doc, ["Task"])
+      iex> task = Org.section(doc, ["Task"])
+      iex> task.todo_keyword
+      nil
+  """
+  @spec cycle_todo(Org.Document.t(), [String.t()], Org.Writer.workflow_config() | nil) :: Org.Document.t()
+  def cycle_todo(doc, path, workflow_config \\ nil) do
+    Org.Writer.cycle_todo(doc, path, workflow_config)
+  end
+
+  @doc """
+  Cycles a TODO keyword backwards to the previous state in its workflow sequence.
+
+  ## Examples
+
+      iex> doc = Org.load_string("* DONE Task")
+      iex> doc = Org.cycle_todo_backward(doc, ["Task"])
+      iex> task = Org.section(doc, ["Task"])
+      iex> task.todo_keyword
+      "TODO"
+  """
+  @spec cycle_todo_backward(Org.Document.t(), [String.t()], Org.Writer.workflow_config() | nil) :: Org.Document.t()
+  def cycle_todo_backward(doc, path, workflow_config \\ nil) do
+    Org.Writer.cycle_todo_backward(doc, path, workflow_config)
+  end
+
+  @doc """
+  Sets a specific TODO keyword on a section.
+
+  ## Examples
+
+      iex> doc = Org.load_string("* Task")
+      iex> doc = Org.set_todo_keyword(doc, ["Task"], "TODO")
+      iex> task = Org.section(doc, ["Task"])
+      iex> task.todo_keyword
+      "TODO"
+  """
+  @spec set_todo_keyword(Org.Document.t(), [String.t()], String.t() | nil) :: Org.Document.t()
+  def set_todo_keyword(doc, path, keyword) do
+    Org.Writer.set_todo_keyword(doc, path, keyword)
+  end
+
+  @doc """
+  Removes TODO keyword from a section (sets it to nil).
+
+  ## Examples
+
+      iex> doc = Org.load_string("* TODO Task")
+      iex> doc = Org.clear_todo_keyword(doc, ["Task"])
+      iex> task = Org.section(doc, ["Task"])
+      iex> task.todo_keyword
+      nil
+  """
+  @spec clear_todo_keyword(Org.Document.t(), [String.t()]) :: Org.Document.t()
+  def clear_todo_keyword(doc, path) do
+    Org.Writer.clear_todo_keyword(doc, path)
+  end
+
+  @doc """
+  Checks if a keyword represents a "done" state in any workflow sequence.
+
+  ## Examples
+
+      iex> config = Org.default_workflow_config()
+      iex> Org.todo_keyword_done?("DONE", config)
+      true
+      iex> Org.todo_keyword_done?("TODO", config)
+      false
+  """
+  @spec todo_keyword_done?(String.t() | nil, Org.Writer.workflow_config()) :: boolean()
+  def todo_keyword_done?(keyword, workflow_config) do
+    Org.Writer.todo_keyword_done?(keyword, workflow_config)
+  end
+
+  @doc """
+  Checks if a keyword represents an "active" state in any workflow sequence.
+
+  ## Examples
+
+      iex> config = Org.default_workflow_config()
+      iex> Org.todo_keyword_active?("TODO", config)
+      true
+      iex> Org.todo_keyword_active?("DONE", config)
+      false
+  """
+  @spec todo_keyword_active?(String.t() | nil, Org.Writer.workflow_config()) :: boolean()
+  def todo_keyword_active?(keyword, workflow_config) do
+    Org.Writer.todo_keyword_active?(keyword, workflow_config)
+  end
+
+  @doc """
+  Gets all possible TODO keywords from a workflow configuration.
+
+  ## Examples
+
+      iex> config = Org.default_workflow_config()
+      iex> keywords = Org.all_todo_keywords(config)
+      iex> "TODO" in keywords
+      true
+      iex> "DONE" in keywords
+      true
+  """
+  @spec all_todo_keywords(Org.Writer.workflow_config()) :: [String.t()]
+  def all_todo_keywords(workflow_config) do
+    Org.Writer.all_todo_keywords(workflow_config)
+  end
+
+  @doc """
+  Extracts all sections with specific TODO keywords.
+
+  ## Examples
+
+      iex> doc = Org.load_string("* TODO Task 1\\n* DONE Task 2\\n* TODO Task 3")
+      iex> todos = Org.sections_by_todo_keyword(doc, "TODO")
+      iex> length(todos)
+      2
+      iex> for section <- todos, do: section.title
+      ["Task 1", "Task 3"]
+  """
+  @spec sections_by_todo_keyword(Org.Document.t() | Org.Section.t(), String.t()) :: [Org.Section.t()]
+  def sections_by_todo_keyword(doc_or_section, keyword) do
+    extract_sections_by_todo_keyword(doc_or_section, keyword)
+  end
+
+  @doc """
+  Extracts all sections that have any TODO keyword (active or done).
+
+  ## Examples
+
+      iex> doc = Org.load_string("* TODO Task 1\\n* Regular Section\\n* DONE Task 2")
+      iex> todos = Org.all_todo_sections(doc)
+      iex> length(todos)
+      2
+      iex> for section <- todos, do: {section.title, section.todo_keyword}
+      [{"Task 1", "TODO"}, {"Task 2", "DONE"}]
+  """
+  @spec all_todo_sections(Org.Document.t() | Org.Section.t()) :: [Org.Section.t()]
+  def all_todo_sections(doc_or_section) do
+    extract_all_todo_sections(doc_or_section)
+  end
+
+  @doc """
+  Extracts all sections with "active" TODO keywords (not done states).
+
+  ## Examples
+
+      iex> config = Org.default_workflow_config()
+      iex> doc = Org.load_string("* TODO Task 1\\n* DONE Task 2\\n* TODO Task 3")
+      iex> active_todos = Org.active_todo_sections(doc, config)
+      iex> length(active_todos)
+      2
+  """
+  @spec active_todo_sections(Org.Document.t() | Org.Section.t(), Org.Writer.workflow_config()) :: [Org.Section.t()]
+  def active_todo_sections(doc_or_section, workflow_config) do
+    doc_or_section
+    |> all_todo_sections()
+    |> Enum.filter(fn section ->
+      Org.Writer.todo_keyword_active?(section.todo_keyword, workflow_config)
+    end)
+  end
+
+  @doc """
+  Extracts all sections with "done" TODO keywords.
+
+  ## Examples
+
+      iex> config = Org.default_workflow_config()
+      iex> doc = Org.load_string("* TODO Task 1\\n* DONE Task 2\\n* DONE Task 3")
+      iex> done_todos = Org.done_todo_sections(doc, config)
+      iex> length(done_todos)
+      2
+  """
+  @spec done_todo_sections(Org.Document.t() | Org.Section.t(), Org.Writer.workflow_config()) :: [Org.Section.t()]
+  def done_todo_sections(doc_or_section, workflow_config) do
+    doc_or_section
+    |> all_todo_sections()
+    |> Enum.filter(fn section ->
+      Org.Writer.todo_keyword_done?(section.todo_keyword, workflow_config)
+    end)
+  end
+
+  # Helper functions for TODO keyword extraction
+  defp extract_sections_by_todo_keyword(%Org.Document{sections: sections}, keyword) do
+    Enum.flat_map(sections, &extract_sections_by_todo_keyword(&1, keyword))
+  end
+
+  defp extract_sections_by_todo_keyword(%Org.Section{} = section, keyword) do
+    current = if section.todo_keyword == keyword, do: [section], else: []
+    children = Enum.flat_map(section.children, &extract_sections_by_todo_keyword(&1, keyword))
+    current ++ children
+  end
+
+  defp extract_all_todo_sections(%Org.Document{sections: sections}) do
+    Enum.flat_map(sections, &extract_all_todo_sections/1)
+  end
+
+  defp extract_all_todo_sections(%Org.Section{} = section) do
+    current = if section.todo_keyword, do: [section], else: []
+    children = Enum.flat_map(section.children, &extract_all_todo_sections/1)
+    current ++ children
+  end
+
+  # ============================================================================
+  # Repeater Interval Functions
+  # ============================================================================
+
+  @doc """
+  Completes a repeating task by advancing its timestamps to the next occurrence
+  and resetting its TODO state.
+
+  ## Examples
+
+      iex> doc = Org.load_string("* TODO Weekly Meeting\\n  SCHEDULED: <2024-01-15 Mon 09:00 +1w>")
+      iex> doc = Org.complete_repeating_task(doc, ["Weekly Meeting"])
+      iex> task = Org.section(doc, ["Weekly Meeting"])
+      iex> task.todo_keyword
+      "TODO"
+      iex> task.metadata.scheduled.date
+      ~D[2024-01-22]
+  """
+  @spec complete_repeating_task(Org.Document.t(), [String.t()], DateTime.t() | nil) :: Org.Document.t()
+  def complete_repeating_task(doc, path, completion_time \\ nil) do
+    Org.Writer.complete_repeating_task(doc, path, completion_time)
+  end
+
+  @doc """
+  Advances all repeating timestamps in a section to their next occurrences.
+
+  ## Examples
+
+      iex> doc = Org.load_string("* Task\\n  SCHEDULED: <2024-01-15 Mon +1w>")
+      iex> doc = Org.advance_repeaters(doc, ["Task"])
+      iex> task = Org.section(doc, ["Task"])
+      iex> task.metadata.scheduled.date
+      ~D[2024-01-22]
+  """
+  @spec advance_repeaters(Org.Document.t(), [String.t()]) :: Org.Document.t()
+  def advance_repeaters(doc, path) do
+    Org.Writer.advance_repeaters(doc, path)
+  end
+
+  @doc """
+  Checks if a section has any repeating timestamps.
+
+  ## Examples
+
+      iex> doc = Org.load_string("* Task\\n  SCHEDULED: <2024-01-15 Mon +1w>")
+      iex> task = Org.section(doc, ["Task"])
+      iex> Org.has_repeating_timestamps?(task.metadata)
+      true
+  """
+  @spec has_repeating_timestamps?(map()) :: boolean()
+  def has_repeating_timestamps?(metadata) do
+    Org.Writer.has_repeating_timestamps?(metadata)
+  end
+
+  @doc """
+  Sets a repeating scheduled timestamp for a section.
+
+  ## Examples
+
+      iex> doc = Org.load_string("* Task")
+      iex> {:ok, timestamp} = Org.Timestamp.parse("<2024-01-15 Mon 09:00 +1w>")
+      iex> doc = Org.schedule_repeating(doc, ["Task"], timestamp)
+      iex> task = Org.section(doc, ["Task"])
+      iex> Org.Timestamp.repeating?(task.metadata.scheduled)
+      true
+  """
+  @spec schedule_repeating(Org.Document.t(), [String.t()], Org.Timestamp.t()) :: Org.Document.t()
+  def schedule_repeating(doc, path, timestamp) do
+    Org.Writer.schedule_repeating(doc, path, timestamp)
+  end
+
+  @doc """
+  Sets a repeating deadline timestamp for a section.
+  """
+  @spec deadline_repeating(Org.Document.t(), [String.t()], Org.Timestamp.t()) :: Org.Document.t()
+  def deadline_repeating(doc, path, timestamp) do
+    Org.Writer.deadline_repeating(doc, path, timestamp)
+  end
+
+  @doc """
+  Extracts all sections that have repeating timestamps.
+
+  ## Examples
+
+      iex> doc = Org.load_string("* TODO Daily Standup\\n  SCHEDULED: <2024-01-15 Mon 09:00 +1d>\\n* TODO One-time Task\\n  SCHEDULED: <2024-01-16 Tue>")
+      iex> repeating_tasks = Org.repeating_sections(doc)
+      iex> length(repeating_tasks)
+      1
+      iex> hd(repeating_tasks).title
+      "Daily Standup"
+  """
+  @spec repeating_sections(Org.Document.t() | Org.Section.t()) :: [Org.Section.t()]
+  def repeating_sections(doc_or_section) do
+    doc_or_section
+    |> all_todo_sections()
+    |> Enum.filter(fn section ->
+      has_repeating_timestamps?(section.metadata)
+    end)
+  end
+
+  @doc """
+  Finds all sections scheduled for today, including repeating occurrences.
+
+  ## Examples
+
+      iex> doc = Org.load_string("* TODO Daily Meeting\\n  SCHEDULED: <2024-01-10 Wed 09:00 +1d>")
+      iex> today_items = Org.agenda_items_with_repeaters(doc, ~D[2024-01-15])
+      iex> length(today_items)
+      1
+  """
+  @spec agenda_items_with_repeaters(Org.Document.t() | Org.Section.t(), Date.t()) :: [Org.Section.t()]
+  def agenda_items_with_repeaters(doc_or_section, date \\ Date.utc_today()) do
+    scheduled_sections = scheduled_items(doc_or_section)
+
+    Enum.filter(scheduled_sections, fn section ->
+      case section.metadata[:scheduled] do
+        %Org.Timestamp{repeater: nil, date: scheduled_date} ->
+          # Non-repeating: exact date match
+          Date.compare(scheduled_date, date) == :eq
+
+        %Org.Timestamp{repeater: %{}} = timestamp ->
+          # Repeating: check if it occurs on this date
+          occurrences = Org.Timestamp.occurrences_in_range(timestamp, date, date)
+          length(occurrences) > 0
+
+        _ ->
+          false
+      end
+    end)
+  end
+
+  @doc """
+  Finds overdue tasks, accounting for repeating deadlines.
+
+  ## Examples
+
+      iex> doc = Org.load_string("* TODO Weekly Report\\n  DEADLINE: <2024-01-10 Wed +1w>")
+      iex> overdue = Org.overdue_items_with_repeaters(doc, ~D[2024-01-15])
+      iex> length(overdue)
+      0
+  """
+  @spec overdue_items_with_repeaters(Org.Document.t() | Org.Section.t(), Date.t()) :: [Org.Section.t()]
+  def overdue_items_with_repeaters(doc_or_section, today \\ Date.utc_today()) do
+    deadline_sections = deadline_items(doc_or_section)
+
+    Enum.filter(deadline_sections, fn section ->
+      section.todo_keyword != "DONE" && section_is_overdue?(section, today)
+    end)
+  end
+
+  defp section_is_overdue?(section, today) do
+    case section.metadata[:deadline] do
+      %Org.Timestamp{repeater: nil, date: deadline_date} ->
+        # Non-repeating: past deadline
+        Date.compare(deadline_date, today) == :lt
+
+      %Org.Timestamp{repeater: %{}} = timestamp ->
+        # Repeating: check if the next occurrence is in the past
+        check_repeating_deadline_overdue(timestamp, today)
+
+      _ ->
+        false
+    end
+  end
+
+  defp check_repeating_deadline_overdue(timestamp, today) do
+    case Org.Timestamp.next_occurrence_from(timestamp, Date.add(today, -1)) do
+      %Org.Timestamp{date: next_date} ->
+        Date.compare(next_date, today) == :lt
+
+      _ ->
+        false
+    end
+  end
+
+  @doc """
+  Finds all occurrences of repeating tasks within a date range.
+
+  ## Examples
+
+      iex> doc = Org.load_string("* TODO Daily Standup\\n  SCHEDULED: <2024-01-15 Mon 09:00 +1d>")
+      iex> occurrences = Org.repeater_occurrences_in_range(doc, ~D[2024-01-15], ~D[2024-01-20])
+      iex> length(occurrences)
+      6
+  """
+  @spec repeater_occurrences_in_range(Org.Document.t() | Org.Section.t(), Date.t(), Date.t()) :: [
+          {Org.Section.t(), Org.Timestamp.t()}
+        ]
+  def repeater_occurrences_in_range(doc_or_section, start_date, end_date) do
+    repeating_sections(doc_or_section)
+    |> Enum.flat_map(&section_occurrence_pairs(&1, start_date, end_date))
+  end
+
+  defp section_occurrence_pairs(section, start_date, end_date) do
+    # Find all repeating timestamps in this section
+    repeating_timestamps = get_repeating_timestamps(section)
+
+    Enum.flat_map(repeating_timestamps, &timestamp_occurrences_for_section(&1, section, start_date, end_date))
+  end
+
+  defp timestamp_occurrences_for_section({_key, timestamp}, section, start_date, end_date) do
+    occurrences = Org.Timestamp.occurrences_in_range(timestamp, start_date, end_date)
+    Enum.map(occurrences, &{section, &1})
+  end
+
+  # Helper functions for repeater functionality
+
+  defp get_repeating_timestamps(section) do
+    section.metadata
+    |> Enum.filter(fn {_key, value} ->
+      case value do
+        %Org.Timestamp{repeater: %{}} -> true
+        _ -> false
+      end
+    end)
+  end
 end

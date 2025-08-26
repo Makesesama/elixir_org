@@ -37,10 +37,15 @@ You can see an example in [examples directory](./example)
 - [x] Parse Fragments
 - [x] Tags
 - [x] Custom TODO keywords
+- [x] Workflow Sequences
 - [x] Metadata and Properties
 - [x] File property comments
+- [x] Extended Timestamp support (write)
+- [x] Repeater Intervals
+- [ ] Computed effective tags for inheritance
+- [ ] Enhanced Priority support
+- [ ] ? drawers
 - [x] Handling org-directories and multi file parsing
 - [ ] Streaming of files
 - [ ] Denote Support
 - [ ] Org Roam support
-- [ ] Something like org-ql

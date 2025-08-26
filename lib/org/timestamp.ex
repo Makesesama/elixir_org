@@ -337,4 +337,313 @@ defmodule Org.Timestamp do
   defp normalize_string(nil), do: nil
   defp normalize_string(""), do: nil
   defp normalize_string(str), do: String.trim(str)
+
+  # ============================================================================
+  # Repeater Calculation Functions
+  # ============================================================================
+
+  @doc """
+  Calculates the next occurrence of a repeating timestamp.
+
+  ## Examples
+
+      iex> {:ok, timestamp} = Org.Timestamp.parse("<2024-01-15 Mon +1w>")
+      iex> next = Org.Timestamp.next_occurrence(timestamp)
+      iex> next.date
+      ~D[2024-01-22]
+
+      iex> {:ok, timestamp} = Org.Timestamp.parse("<2024-01-15 Mon 09:00 +1d>")
+      iex> next = Org.Timestamp.next_occurrence(timestamp)
+      iex> next.date
+      ~D[2024-01-16]
+      iex> next.start_time
+      ~T[09:00:00]
+  """
+  @spec next_occurrence(t()) :: t() | nil
+  def next_occurrence(%__MODULE__{repeater: nil}), do: nil
+
+  def next_occurrence(%__MODULE__{repeater: repeater} = timestamp) do
+    new_date = add_repeater_interval(timestamp.date, repeater)
+    new_day_name = day_name_from_date(new_date)
+
+    updated_timestamp = %{
+      timestamp
+      | date: new_date,
+        day_name: new_day_name,
+        raw: update_raw_date(timestamp.raw, new_date, new_day_name)
+    }
+
+    updated_timestamp
+  end
+
+  @doc """
+  Calculates the next occurrence from a specific reference date.
+
+  ## Examples
+
+      iex> {:ok, timestamp} = Org.Timestamp.parse("<2024-01-15 Mon +1w>")
+      iex> reference = ~D[2024-01-20]
+      iex> next = Org.Timestamp.next_occurrence_from(timestamp, reference)
+      iex> next.date
+      ~D[2024-01-22]
+  """
+  @spec next_occurrence_from(t(), Date.t()) :: t() | nil
+  def next_occurrence_from(%__MODULE__{repeater: nil}, _reference_date), do: nil
+
+  def next_occurrence_from(%__MODULE__{repeater: repeater} = timestamp, reference_date) do
+    # Find the next occurrence after reference_date
+    next_date = find_next_occurrence_after(timestamp.date, repeater, reference_date)
+    new_day_name = day_name_from_date(next_date)
+
+    updated_timestamp = %{
+      timestamp
+      | date: next_date,
+        day_name: new_day_name,
+        raw: update_raw_date(timestamp.raw, next_date, new_day_name)
+    }
+
+    updated_timestamp
+  end
+
+  @doc """
+  Generates all occurrences of a repeating timestamp within a date range.
+
+  ## Examples
+
+      iex> {:ok, timestamp} = Org.Timestamp.parse("<2024-01-15 Mon +1w>")
+      iex> occurrences = Org.Timestamp.occurrences_in_range(timestamp, ~D[2024-01-10], ~D[2024-02-05])
+      iex> length(occurrences)
+      4
+      iex> hd(occurrences).date
+      ~D[2024-01-15]
+  """
+  @spec occurrences_in_range(t(), Date.t(), Date.t()) :: [t()]
+  def occurrences_in_range(%__MODULE__{repeater: nil}, _start_date, _end_date), do: []
+
+  def occurrences_in_range(%__MODULE__{repeater: repeater} = timestamp, start_date, end_date) do
+    # Start from the original date or first occurrence on/after start_date
+    first_occurrence =
+      if Date.compare(timestamp.date, start_date) == :lt do
+        find_next_occurrence_on_or_after(timestamp.date, repeater, start_date)
+      else
+        timestamp.date
+      end
+
+    # Only generate if the first occurrence is within the range
+    if Date.compare(first_occurrence, end_date) != :gt do
+      generate_occurrences(timestamp, first_occurrence, end_date, repeater, [])
+    else
+      []
+    end
+  end
+
+  @doc """
+  Advances a repeating timestamp to its next occurrence (typically when task is completed).
+
+  ## Examples
+
+      iex> {:ok, timestamp} = Org.Timestamp.parse("<2024-01-15 Mon +1w>")
+      iex> advanced = Org.Timestamp.advance_repeater(timestamp)
+      iex> advanced.date
+      ~D[2024-01-22]
+  """
+  @spec advance_repeater(t()) :: t()
+  def advance_repeater(%__MODULE__{repeater: nil} = timestamp), do: timestamp
+  def advance_repeater(timestamp), do: next_occurrence(timestamp)
+
+  @doc """
+  Checks if a timestamp should repeat on or after a given date.
+
+  ## Examples
+
+      iex> {:ok, timestamp} = Org.Timestamp.parse("<2024-01-15 Mon +1w>")
+      iex> Org.Timestamp.repeats_on_or_after?(timestamp, ~D[2024-01-22])
+      true
+      iex> Org.Timestamp.repeats_on_or_after?(timestamp, ~D[2024-01-10])
+      true
+  """
+  @spec repeats_on_or_after?(t(), Date.t()) :: boolean()
+  def repeats_on_or_after?(%__MODULE__{repeater: nil}, _date), do: false
+
+  def repeats_on_or_after?(%__MODULE__{} = timestamp, target_date) do
+    # Check if the original date is on or after target
+    if Date.compare(timestamp.date, target_date) != :lt do
+      true
+    else
+      # Check if any future occurrence is on or after target
+      occurrences = occurrences_in_range(timestamp, target_date, Date.add(target_date, 365))
+      length(occurrences) > 0
+    end
+  end
+
+  @doc """
+  Gets the interval in days for a repeater (approximate for months/years).
+
+  ## Examples
+
+      iex> Org.Timestamp.repeater_interval_days(%{count: 1, unit: :week})
+      7
+      iex> Org.Timestamp.repeater_interval_days(%{count: 2, unit: :day})
+      2
+  """
+  @spec repeater_interval_days(repeater()) :: integer()
+  def repeater_interval_days(%{count: count, unit: unit}) do
+    base_days =
+      case unit do
+        # Less than a day
+        :hour -> 0
+        :day -> 1
+        :week -> 7
+        # Approximate
+        :month -> 30
+        # Approximate
+        :year -> 365
+      end
+
+    count * base_days
+  end
+
+  # Private helper functions for repeater calculations
+
+  defp add_repeater_interval(date, %{count: count, unit: unit}) do
+    case unit do
+      :hour ->
+        # Hours don't affect the date, return same date
+        date
+
+      :day ->
+        Date.add(date, count)
+
+      :week ->
+        Date.add(date, count * 7)
+
+      :month ->
+        add_months(date, count)
+
+      :year ->
+        add_years(date, count)
+    end
+  end
+
+  defp add_months(date, months) do
+    new_month = date.month + months
+
+    {years_to_add, final_month} =
+      if new_month > 12 do
+        {div(new_month - 1, 12), rem(new_month - 1, 12) + 1}
+      else
+        {0, new_month}
+      end
+
+    new_year = date.year + years_to_add
+
+    # Handle day overflow (e.g., Jan 31 + 1 month)
+    max_day = Date.days_in_month(Date.new!(new_year, final_month, 1))
+    final_day = min(date.day, max_day)
+
+    Date.new!(new_year, final_month, final_day)
+  end
+
+  defp add_years(date, years) do
+    new_year = date.year + years
+
+    # Handle leap year edge case (Feb 29 -> Feb 28)
+    final_day =
+      if date.month == 2 and date.day == 29 and not Date.leap_year?(Date.new!(new_year, 1, 1)) do
+        28
+      else
+        date.day
+      end
+
+    Date.new!(new_year, date.month, final_day)
+  end
+
+  defp find_next_occurrence_after(original_date, repeater, reference_date) do
+    if Date.compare(original_date, reference_date) != :lt do
+      original_date
+    else
+      # Calculate how many intervals we need to advance
+      days_diff = Date.diff(reference_date, original_date)
+      interval_days = repeater_interval_days(repeater)
+
+      if interval_days > 0 do
+        intervals_needed = div(days_diff, interval_days) + 1
+        advance_by_intervals(original_date, repeater, intervals_needed)
+      else
+        # For hourly repeaters, just return the next day
+        Date.add(reference_date, 1)
+      end
+    end
+  end
+
+  defp find_next_occurrence_on_or_after(original_date, repeater, reference_date) do
+    cond do
+      Date.compare(original_date, reference_date) != :lt ->
+        original_date
+
+      repeater_interval_days(repeater) == 0 ->
+        # For hourly repeaters, just return the reference date
+        reference_date
+
+      true ->
+        calculate_next_occurrence_with_intervals(original_date, repeater, reference_date)
+    end
+  end
+
+  defp calculate_next_occurrence_with_intervals(original_date, repeater, reference_date) do
+    days_diff = Date.diff(reference_date, original_date)
+    interval_days = repeater_interval_days(repeater)
+    intervals_needed = div(days_diff, interval_days)
+    candidate = advance_by_intervals(original_date, repeater, intervals_needed)
+
+    if Date.compare(candidate, reference_date) == :lt do
+      advance_by_intervals(original_date, repeater, intervals_needed + 1)
+    else
+      candidate
+    end
+  end
+
+  defp advance_by_intervals(date, repeater, intervals) do
+    %{count: count, unit: unit} = repeater
+    multiplied_repeater = %{count: count * intervals, unit: unit}
+    add_repeater_interval(date, multiplied_repeater)
+  end
+
+  defp generate_occurrences(timestamp, current_date, end_date, repeater, acc) do
+    if Date.compare(current_date, end_date) == :gt do
+      Enum.reverse(acc)
+    else
+      current_occurrence = %{
+        timestamp
+        | date: current_date,
+          day_name: day_name_from_date(current_date),
+          raw: update_raw_date(timestamp.raw, current_date, day_name_from_date(current_date))
+      }
+
+      next_date = add_repeater_interval(current_date, repeater)
+      generate_occurrences(timestamp, next_date, end_date, repeater, [current_occurrence | acc])
+    end
+  end
+
+  defp day_name_from_date(date) do
+    case Date.day_of_week(date) do
+      1 -> "Mon"
+      2 -> "Tue"
+      3 -> "Wed"
+      4 -> "Thu"
+      5 -> "Fri"
+      6 -> "Sat"
+      7 -> "Sun"
+    end
+  end
+
+  defp update_raw_date(raw, new_date, new_day_name) do
+    # Simple replacement - extract the date pattern and replace it
+    date_str = Date.to_string(new_date)
+
+    # Replace the date and day name in the raw string
+    raw
+    |> String.replace(~r/\d{4}-\d{2}-\d{2}/, date_str)
+    |> String.replace(~r/\b(Mon|Tue|Wed|Thu|Fri|Sat|Sun)\b/, new_day_name)
+  end
 end
