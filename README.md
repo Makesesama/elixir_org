@@ -43,7 +43,7 @@ You can see an example in [examples directory](./example)
 - [x] Extended Timestamp support (write)
 - [x] Repeater Intervals
 - [x] Tag Inheritance (computed effective tags)
-- [ ] Enhanced Priority support
+- [x] Enhanced Priority support
 - [ ] ? drawers
 - [x] Handling org-directories and multi file parsing
 - [ ] Streaming of files

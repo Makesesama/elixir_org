@@ -233,6 +233,206 @@ defmodule Org do
     Enum.flat_map(children, &extract_sections_by_priority(&1, target_priority))
   end
 
+  # ============================================================================
+  # Enhanced Priority Functions
+  # ============================================================================
+
+  @doc """
+  Extracts all sections with priority at least as high as the specified minimum priority.
+
+  Uses Org.Priority for comparison. A > B > C > nil.
+
+  ## Examples
+
+      iex> doc = Org.load_string(\"\"\"
+      ...> * TODO [#A] High task
+      ...> * TODO [#B] Medium task  
+      ...> * TODO [#C] Low task
+      ...> * TODO Regular task
+      ...> \"\"\")
+      iex> important = Org.sections_with_min_priority(doc, "B")
+      iex> for section <- important, do: {section.title, section.priority}
+      [{"High task", "A"}, {"Medium task", "B"}]
+  """
+  @spec sections_with_min_priority(Org.Document.t() | Org.Section.t(), String.t() | nil) :: [Org.Section.t()]
+  def sections_with_min_priority(doc_or_section, min_priority) do
+    all_sections = extract_all_sections(doc_or_section)
+
+    Enum.filter(all_sections, fn section ->
+      section.priority != nil && Org.Priority.at_least?(section.priority, min_priority)
+    end)
+  end
+
+  @doc """
+  Extracts all sections with priority in the given range (inclusive).
+
+  ## Examples
+
+      iex> doc = Org.load_string(\"\"\"
+      ...> * TODO [#A] High task
+      ...> * TODO [#B] Medium task  
+      ...> * TODO [#C] Low task
+      ...> \"\"\")
+      iex> mid_priority = Org.sections_with_priority_range(doc, "B", "C")
+      iex> for section <- mid_priority, do: section.title
+      ["Medium task", "Low task"]
+  """
+  @spec sections_with_priority_range(Org.Document.t() | Org.Section.t(), String.t(), String.t()) :: [Org.Section.t()]
+  def sections_with_priority_range(doc_or_section, min_priority, max_priority) do
+    all_sections = extract_all_sections(doc_or_section)
+
+    Enum.filter(all_sections, fn section ->
+      section.priority != nil && Org.Priority.in_range?(section.priority, min_priority, max_priority)
+    end)
+  end
+
+  @doc """
+  Sorts sections by priority in descending order (A → B → C → nil).
+
+  ## Examples
+
+      iex> doc = Org.load_string(\"\"\"
+      ...> * TODO [#C] Low task
+      ...> * TODO [#A] High task
+      ...> * TODO [#B] Medium task
+      ...> * TODO Regular task
+      ...> \"\"\")
+      iex> sorted = Org.sections_sorted_by_priority(doc)
+      iex> for section <- sorted, do: {section.title, section.priority}
+      [{"High task", "A"}, {"Medium task", "B"}, {"Low task", "C"}, {"Regular task", nil}]
+  """
+  @spec sections_sorted_by_priority(Org.Document.t() | Org.Section.t()) :: [Org.Section.t()]
+  def sections_sorted_by_priority(doc_or_section) do
+    all_sections = extract_all_sections(doc_or_section)
+
+    Enum.sort(all_sections, fn section1, section2 ->
+      Org.Priority.higher?(section1.priority, section2.priority)
+    end)
+  end
+
+  @doc """
+  Extracts all high-priority sections (priority A).
+
+  ## Examples
+
+      iex> doc = Org.load_string(\"\"\"
+      ...> * TODO [#A] Critical task
+      ...> * TODO [#B] Medium task
+      ...> \"\"\")
+      iex> high = Org.high_priority_sections(doc)
+      iex> for section <- high, do: section.title
+      ["Critical task"]
+  """
+  @spec high_priority_sections(Org.Document.t() | Org.Section.t()) :: [Org.Section.t()]
+  def high_priority_sections(doc_or_section) do
+    sections_by_priority(doc_or_section, "A")
+  end
+
+  @doc """
+  Calculates the effective priority of a section considering inheritance.
+
+  If a section has no priority, it inherits from its parent sections.
+  Returns the first non-nil priority found in the parent chain.
+
+  ## Examples
+
+      iex> doc = Org.load_string(\"\"\"
+      ...> * TODO [#A] Parent task
+      ...> ** TODO Child task
+      ...> *** TODO Grandchild task
+      ...> \"\"\")
+      iex> _child = Org.section(doc, ["Parent task", "Child task"])
+      iex> Org.effective_priority(doc, ["Parent task", "Child task"])
+      "A"
+  """
+  @spec effective_priority(Org.Document.t(), [String.t()]) :: String.t() | nil
+  def effective_priority(doc, path) do
+    case path do
+      [] ->
+        # Document level has no priority
+        nil
+
+      _ ->
+        # Get the target section
+        section = section(doc, path)
+
+        # If section has its own priority, return it
+        if section.priority do
+          section.priority
+        else
+          # Walk up the parent chain to find inherited priority
+          find_inherited_priority(doc, path)
+        end
+    end
+  end
+
+  @doc """
+  Extracts all sections that have an effective priority (either direct or inherited).
+
+  ## Examples
+
+      iex> doc = Org.load_string(\"\"\"
+      ...> * TODO [#A] Parent
+      ...> ** TODO Child with no priority
+      ...> * TODO [#B] Another parent  
+      ...> ** TODO Another child
+      ...> * TODO Regular task
+      ...> \"\"\")
+      iex> effective = Org.sections_with_effective_priority(doc)
+      iex> length(effective)
+      4
+  """
+  @spec sections_with_effective_priority(Org.Document.t() | Org.Section.t()) :: [Org.Section.t()]
+  def sections_with_effective_priority(doc_or_section) do
+    all_sections_with_paths = extract_all_sections_with_paths(doc_or_section)
+
+    Enum.filter(all_sections_with_paths, fn {_section, path} ->
+      effective_priority(doc_or_section, path) != nil
+    end)
+    |> Enum.map(fn {section, _path} -> section end)
+  end
+
+  # Helper functions for enhanced priority features
+
+  defp extract_all_sections(%Org.Document{sections: sections}) do
+    Enum.flat_map(sections, &extract_all_sections/1)
+  end
+
+  defp extract_all_sections(%Org.Section{} = section) do
+    children = Enum.flat_map(section.children, &extract_all_sections/1)
+    [section | children]
+  end
+
+  defp find_inherited_priority(_doc, [_last]) do
+    # Top level, no parent
+    nil
+  end
+
+  defp find_inherited_priority(doc, path) do
+    parent_path = Enum.drop(path, -1)
+    parent_section = section(doc, parent_path)
+
+    if parent_section.priority do
+      parent_section.priority
+    else
+      find_inherited_priority(doc, parent_path)
+    end
+  end
+
+  defp extract_all_sections_with_paths(%Org.Document{sections: sections}) do
+    Enum.flat_map(sections, &extract_sections_with_paths(&1, []))
+  end
+
+  defp extract_all_sections_with_paths(%Org.Section{} = section) do
+    extract_sections_with_paths(section, [])
+  end
+
+  defp extract_sections_with_paths(%Org.Section{title: title, children: children} = section, parent_path) do
+    current_path = parent_path ++ [title]
+    child_sections = Enum.flat_map(children, &extract_sections_with_paths(&1, current_path))
+    [{section, current_path} | child_sections]
+  end
+
   @doc """
   Converts an Org document or any Org struct to a JSON-encodable map.
 
