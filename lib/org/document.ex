@@ -25,22 +25,32 @@ defmodule Org.Document do
     %Org.Document{doc | comments: [comment | doc.comments]}
   end
 
-  @doc "Prepend a subsection at the given level with optional TODO keyword and priority."
-  def add_subsection(doc, level, title, todo_keyword \\ nil, priority \\ nil)
+  @doc "Prepend a subsection at the given level with optional TODO keyword, priority, and tags."
+  def add_subsection(doc, level, title, todo_keyword \\ nil, priority \\ nil, tags \\ [])
 
-  def add_subsection(doc, 1, title, todo_keyword, priority) do
+  def add_subsection(doc, 1, title, todo_keyword, priority, tags) do
+    # For top-level sections, inherit from file tags
+    file_tags = get_file_tags(doc)
+    all_tags = (file_tags ++ tags) |> Enum.uniq()
+
     %Org.Document{
       doc
-      | sections: [%Org.Section{title: title, todo_keyword: todo_keyword, priority: priority} | doc.sections]
+      | sections: [
+          %Org.Section{title: title, todo_keyword: todo_keyword, priority: priority, tags: all_tags} | doc.sections
+        ]
     }
   end
 
-  def add_subsection(doc, level, title, todo_keyword, priority) do
+  def add_subsection(doc, level, title, todo_keyword, priority, tags) do
     {current, rest} =
       case doc.sections do
         [current | rest] -> {current, rest}
         [] -> {%Org.Section{}, []}
       end
+
+    # For nested sections, we need to calculate inherited tags
+    parent_tags = get_parent_tags_for_level(current, level - 1)
+    all_tags = (parent_tags ++ tags) |> Enum.uniq()
 
     %Org.Document{
       doc
@@ -48,11 +58,69 @@ defmodule Org.Document do
           Org.Section.add_nested(current, level - 1, %Org.Section{
             title: title,
             todo_keyword: todo_keyword,
-            priority: priority
+            priority: priority,
+            tags: all_tags
           })
           | rest
         ]
     }
+  end
+
+  # Helper functions for tag inheritance
+
+  defp get_file_tags(doc) do
+    case Map.get(doc.file_properties, "FILETAGS") do
+      nil -> []
+      filetags_string -> parse_file_tags(filetags_string)
+    end
+  end
+
+  defp parse_file_tags(""), do: []
+  defp parse_file_tags(nil), do: []
+
+  defp parse_file_tags(filetags_string) do
+    # Handle both space-separated and colon-separated tags
+    if String.contains?(filetags_string, ":") do
+      # :tag1:tag2:tag3: format
+      filetags_string
+      |> String.trim()
+      |> String.trim_leading(":")
+      |> String.trim_trailing(":")
+      |> String.split(":")
+      |> Enum.reject(&(&1 == ""))
+      |> Enum.map(&String.trim/1)
+    else
+      # space-separated format
+      filetags_string
+      |> String.split()
+      |> Enum.map(&String.trim/1)
+      |> Enum.reject(&(&1 == ""))
+    end
+  end
+
+  defp get_parent_tags_for_level(section, target_level) do
+    get_section_tags_at_level(section, target_level, 1)
+  end
+
+  defp get_section_tags_at_level(_section, target_level, current_level) when current_level > target_level do
+    []
+  end
+
+  defp get_section_tags_at_level(section, target_level, current_level) when current_level == target_level do
+    section.tags || []
+  end
+
+  defp get_section_tags_at_level(section, target_level, current_level) do
+    # Need to go deeper into the most recent child
+    case section.children do
+      [most_recent_child | _] ->
+        parent_tags = section.tags || []
+        child_tags = get_section_tags_at_level(most_recent_child, target_level, current_level + 1)
+        parent_tags ++ child_tags
+
+      [] ->
+        []
+    end
   end
 
   @doc """

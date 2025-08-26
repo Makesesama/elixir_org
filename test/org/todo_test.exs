@@ -66,9 +66,9 @@ defmodule Org.TodoTest do
       tokens = Org.Lexer.lex("* TODO Task\n** DONE Subtask\n** Another")
 
       assert tokens == [
-               {:section_title, 1, "Task", "TODO", nil},
-               {:section_title, 2, "Subtask", "DONE", nil},
-               {:section_title, 2, "Another", nil, nil}
+               {:section_title, 1, "Task", "TODO", nil, []},
+               {:section_title, 2, "Subtask", "DONE", nil, []},
+               {:section_title, 2, "Another", nil, nil, []}
              ]
     end
   end
@@ -147,9 +147,9 @@ defmodule Org.TodoTest do
       tokens = Org.Lexer.lex("* TODO [#A] Task\n** DONE [#B] Subtask\n** [#C] Another")
 
       assert tokens == [
-               {:section_title, 1, "Task", "TODO", "A"},
-               {:section_title, 2, "Subtask", "DONE", "B"},
-               {:section_title, 2, "Another", nil, "C"}
+               {:section_title, 1, "Task", "TODO", "A", []},
+               {:section_title, 2, "Subtask", "DONE", "B", []},
+               {:section_title, 2, "Another", nil, "C", []}
              ]
     end
   end

@@ -3,7 +3,7 @@ defmodule Org.Lexer do
 
   @type token ::
           {:comment, String.t()}
-          | {:section_title, integer, String.t(), String.t() | nil, String.t() | nil}
+          | {:section_title, integer, String.t(), String.t() | nil, String.t() | nil, [String.t()]}
           | {:table_row, list(String.t())}
           | {:list_item, non_neg_integer(), boolean(), integer() | nil, String.t()}
           | {:empty_line}
@@ -20,14 +20,14 @@ defmodule Org.Lexer do
   For many simple tasks, using the lexer is enough, and a full-fledged `Org.Document` is not needed.
 
   Usage example:
-      iex> source = "#+TITLE: Greetings\n\n* TODO [#A] Hello\n** DONE [#B] World\n** Universe\n* Goodbye\n"
+      iex> source = "#+TITLE: Greetings\n\n* TODO [#A] Hello :work:\n** DONE [#B] World :project:\n** Universe\n* Goodbye\n"
       iex> Org.Lexer.lex(source)
       [{:comment, "+TITLE: Greetings"},
        {:empty_line},
-       {:section_title, 1, "Hello", "TODO", "A"},
-       {:section_title, 2, "World", "DONE", "B"},
-       {:section_title, 2, "Universe", nil, nil},
-       {:section_title, 1, "Goodbye", nil, nil},
+       {:section_title, 1, "Hello", "TODO", "A", ["work"]},
+       {:section_title, 2, "World", "DONE", "B", ["project"]},
+       {:section_title, 2, "Universe", nil, nil, []},
+       {:section_title, 1, "Goodbye", nil, nil, []},
        {:empty_line}]
   """
 
@@ -130,21 +130,53 @@ defmodule Org.Lexer do
     case match do
       # Just asterisks, no content
       [_, nesting] ->
-        append_token(lexer, {:section_title, String.length(nesting), "", nil, nil})
+        append_token(lexer, {:section_title, String.length(nesting), "", nil, nil, []})
 
       # Full match with all components
       [_, nesting, todo_keyword, priority, title] ->
         title = if title != nil, do: String.trim(title), else: ""
         todo_keyword = if todo_keyword != nil and todo_keyword != "", do: todo_keyword, else: nil
         priority = if priority != nil and priority != "", do: priority, else: nil
-        append_token(lexer, {:section_title, String.length(nesting), title, todo_keyword, priority})
+
+        # Extract tags from title
+        {clean_title, tags} = parse_title_and_tags(title)
+
+        append_token(lexer, {:section_title, String.length(nesting), clean_title, todo_keyword, priority, tags})
 
       # Fallback for any other pattern
       _ ->
         # Extract at least the nesting level and treat rest as title
         [_, nesting | rest] = match
         title = rest |> Enum.filter(& &1) |> Enum.join(" ") |> String.trim()
-        append_token(lexer, {:section_title, String.length(nesting), title, nil, nil})
+        {clean_title, tags} = parse_title_and_tags(title)
+        append_token(lexer, {:section_title, String.length(nesting), clean_title, nil, nil, tags})
     end
+  end
+
+  # Tag parsing functions (borrowed from FragmentParser)
+
+  defp parse_title_and_tags(text) do
+    # Match tags at the end of the line in format :tag1:tag2:
+    # Tags must be at the end, optionally preceded by whitespace, and contain no spaces within tag names
+    case Regex.run(~r/^(.*?)\s*(:[^:\s]+(?::[^:\s]+)*:)\s*$/, String.trim(text)) do
+      [_, title, tags_string] ->
+        tags = parse_tags(tags_string)
+        {String.trim(title), tags}
+
+      nil ->
+        # No tags found, return the whole text as title
+        {String.trim(text), []}
+    end
+  end
+
+  defp parse_tags(tags_string) do
+    # Extract tags from :tag1:tag2: format
+    tags_string
+    |> String.trim()
+    |> String.trim_leading(":")
+    |> String.trim_trailing(":")
+    |> String.split(":")
+    |> Enum.reject(&(&1 == ""))
+    |> Enum.map(&String.trim/1)
   end
 end

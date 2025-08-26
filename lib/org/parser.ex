@@ -62,8 +62,8 @@ defmodule Org.Parser do
       {:comment, comment} ->
         handle_comment(parser, comment)
 
-      {:section_title, level, title, todo_keyword, priority} ->
-        handle_section(parser, level, title, todo_keyword, priority)
+      {:section_title, level, title, todo_keyword, priority, tags} ->
+        handle_section(parser, level, title, todo_keyword, priority, tags)
 
       {:empty_line} ->
         handle_empty_line(parser)
@@ -83,11 +83,11 @@ defmodule Org.Parser do
     %{parser | doc: doc}
   end
 
-  defp handle_section(parser, level, title, todo_keyword, priority) do
+  defp handle_section(parser, level, title, todo_keyword, priority, tags) do
     # Finalize any pending content before starting a new section
     parser = finalize_current_content(parser)
 
-    doc = Org.Document.add_subsection(parser.doc, level, title, todo_keyword, priority)
+    doc = Org.Document.add_subsection(parser.doc, level, title, todo_keyword, priority, tags)
     %{parser | doc: doc, mode: :normal}
   end
 

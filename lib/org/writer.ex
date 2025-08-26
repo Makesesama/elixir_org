@@ -273,7 +273,8 @@ defmodule Org.Writer do
     stars = String.duplicate("*", level)
     todo_part = if section.todo_keyword, do: " #{section.todo_keyword}", else: ""
     priority_part = if section.priority, do: " [##{section.priority}]", else: ""
-    header = "#{stars}#{todo_part}#{priority_part} #{section.title}"
+    tags_part = render_section_tags(section.tags)
+    header = "#{stars}#{todo_part}#{priority_part} #{section.title}#{tags_part}"
 
     lines = [header]
 
@@ -290,6 +291,13 @@ defmodule Org.Writer do
     lines = lines ++ sections_to_lines(section.children, level + 1)
 
     lines
+  end
+
+  defp render_section_tags([]), do: ""
+
+  defp render_section_tags(tags) when is_list(tags) do
+    tags_string = tags |> Enum.join(":")
+    " :#{tags_string}:"
   end
 
   defp contents_to_lines(contents) do

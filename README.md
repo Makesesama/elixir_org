@@ -42,7 +42,7 @@ You can see an example in [examples directory](./example)
 - [x] File property comments
 - [x] Extended Timestamp support (write)
 - [x] Repeater Intervals
-- [ ] Computed effective tags for inheritance
+- [x] Tag Inheritance (computed effective tags)
 - [ ] Enhanced Priority support
 - [ ] ? drawers
 - [x] Handling org-directories and multi file parsing
