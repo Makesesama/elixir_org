@@ -18,7 +18,8 @@ defimpl Org.JSONEncodable, for: Org.Document do
       type: "document",
       comments: doc.comments,
       sections: Enum.map(doc.sections, &Org.JSONEncodable.to_json_map/1),
-      contents: Enum.map(doc.contents, &Org.JSONEncodable.to_json_map/1)
+      contents: Enum.map(doc.contents, &Org.JSONEncodable.to_json_map/1),
+      file_properties: doc.file_properties
     }
   end
 end

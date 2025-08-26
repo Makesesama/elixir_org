@@ -16,6 +16,7 @@ defmodule Org.JSONEncodingTest do
       assert json_map == %{
                type: "document",
                comments: ["# This is a comment"],
+               file_properties: %{},
                sections: [],
                contents: [
                  %{
@@ -214,6 +215,7 @@ defmodule Org.JSONEncodingTest do
       assert encoded == %{
                type: "document",
                comments: [],
+               file_properties: %{},
                sections: [],
                contents: [
                  %{type: "paragraph", lines: ["Test paragraph"]}

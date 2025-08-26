@@ -1,10 +1,11 @@
 defmodule Org.Document do
-  defstruct comments: [], sections: [], contents: []
+  defstruct comments: [], sections: [], contents: [], file_properties: %{}
 
   @type t :: %Org.Document{
           comments: list(String.t()),
           sections: list(Org.Section.t()),
-          contents: list(Org.Content.t())
+          contents: list(Org.Content.t()),
+          file_properties: %{String.t() => String.t()}
         }
 
   @moduledoc ~S"""

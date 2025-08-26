@@ -243,6 +243,12 @@ defmodule Org.Writer do
   def to_org_string(%Org.Document{} = doc) do
     lines = []
 
+    # Add file properties first
+    lines = lines ++ Org.FileProperties.render_properties(doc.file_properties)
+
+    # Add blank line after file properties if they exist
+    lines = if doc.file_properties != %{}, do: lines ++ [""], else: lines
+
     # Add comments
     lines = lines ++ Enum.map(doc.comments, fn comment -> "##{comment}" end)
 

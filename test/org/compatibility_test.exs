@@ -291,8 +291,9 @@ defmodule Org.CompatibilityTest do
       # Should parse without errors
       assert %Org.Document{} = doc
 
-      # Check document metadata
-      assert length(doc.comments) == 2
+      # Check document metadata (file properties)
+      assert doc.file_properties["TITLE"] == "Test Document"
+      assert doc.file_properties["AUTHOR"] == "Test Author"
 
       # Check sections
       assert length(doc.sections) == 2

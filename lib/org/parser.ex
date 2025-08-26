@@ -45,7 +45,13 @@ defmodule Org.Parser do
   def parse_tokens(tokens) do
     parser = %Org.Parser{}
 
-    tokens
+    # First pass: extract file properties from the beginning
+    {file_properties, remaining_tokens} = extract_file_properties(tokens)
+
+    # Set file properties in document
+    parser = %{parser | doc: %{parser.doc | file_properties: file_properties}}
+
+    remaining_tokens
     |> Enum.reduce(parser, &parse_token/2)
     |> finalize_document()
   end
@@ -166,6 +172,9 @@ defmodule Org.Parser do
     # Reverse everything to correct the order
     doc = Org.Document.reverse_recursive(parser.doc)
 
+    # Extract properties from section content
+    doc = extract_section_properties(doc)
+
     # Check for any errors in the parsing context
     case Map.get(parser.context, :errors, []) do
       [] ->
@@ -239,5 +248,129 @@ defmodule Org.Parser do
     errors = Map.get(parser.context, :errors, [])
     context = Map.put(parser.context, :errors, [error | errors])
     %{parser | context: context}
+  end
+
+  # File properties extraction functions
+
+  defp extract_file_properties(tokens) do
+    extract_file_properties_recursive(tokens, %{}, [])
+  end
+
+  defp extract_file_properties_recursive([{:comment, comment} | rest], properties, non_property_tokens) do
+    case Org.FileProperties.parse_file_property_line("##{comment}") do
+      {key, value} ->
+        # This is a file property, add it to properties map
+        updated_properties = Map.put(properties, key, value)
+        extract_file_properties_recursive(rest, updated_properties, non_property_tokens)
+
+      nil ->
+        # Not a file property, treat as regular comment and stop file property parsing
+        {properties, [{:comment, comment} | rest]}
+    end
+  end
+
+  defp extract_file_properties_recursive([{:empty_line} | rest], properties, non_property_tokens) do
+    # Empty lines are allowed between file properties
+    extract_file_properties_recursive(rest, properties, non_property_tokens)
+  end
+
+  defp extract_file_properties_recursive([token | rest], properties, _non_property_tokens) do
+    # Any other token stops file property parsing
+    {properties, [token | rest]}
+  end
+
+  defp extract_file_properties_recursive([], properties, _non_property_tokens) do
+    {properties, []}
+  end
+
+  # Section property extraction functions
+
+  defp extract_section_properties(%Org.Document{sections: sections} = doc) do
+    updated_sections = Enum.map(sections, &extract_section_properties_recursive/1)
+    %{doc | sections: updated_sections}
+  end
+
+  defp extract_section_properties_recursive(%Org.Section{} = section) do
+    # Extract properties from the section's content
+    {properties, metadata, remaining_content} = extract_properties_from_content(section.contents)
+
+    # Update child sections recursively
+    updated_children = Enum.map(section.children, &extract_section_properties_recursive/1)
+
+    %{
+      section
+      | properties: Map.merge(section.properties, properties),
+        metadata: Map.merge(section.metadata, metadata),
+        contents: remaining_content,
+        children: updated_children
+    }
+  end
+
+  defp extract_properties_from_content(contents) do
+    # Find the first paragraph and check if it contains properties
+    case find_property_paragraph(contents) do
+      {paragraph_index, paragraph} ->
+        process_property_paragraph(contents, paragraph_index, paragraph)
+
+      nil ->
+        {%{}, %{}, contents}
+    end
+  end
+
+  defp process_property_paragraph(contents, paragraph_index, paragraph) do
+    # Extract properties from this paragraph
+    {properties, metadata, remaining_lines} = Org.PropertyDrawer.extract_all(paragraph.lines)
+
+    if properties != %{} or metadata != %{} do
+      # Replace the paragraph with remaining content
+      updated_contents = update_contents_after_extraction(contents, paragraph_index, remaining_lines)
+      {properties, metadata, updated_contents}
+    else
+      {%{}, %{}, contents}
+    end
+  end
+
+  defp update_contents_after_extraction(contents, paragraph_index, remaining_lines) do
+    case remaining_lines do
+      [] ->
+        List.delete_at(contents, paragraph_index)
+
+      lines ->
+        List.replace_at(contents, paragraph_index, %Org.Paragraph{lines: lines})
+    end
+  end
+
+  defp find_property_paragraph(contents) do
+    Enum.with_index(contents)
+    |> Enum.find_value(&check_content_for_properties/1)
+  end
+
+  defp check_content_for_properties({%Org.Paragraph{lines: lines} = paragraph, index}) do
+    # Check if this paragraph looks like it might contain properties
+    if paragraph_might_contain_properties(lines) do
+      {index, paragraph}
+    else
+      nil
+    end
+  end
+
+  defp check_content_for_properties({_content, _index}), do: nil
+
+  defp paragraph_might_contain_properties(lines) do
+    # A paragraph might contain properties if it starts with :PROPERTIES: or has metadata lines
+    Enum.any?(lines, fn line ->
+      case line do
+        line when is_binary(line) ->
+          trimmed = String.trim(line)
+
+          trimmed == ":PROPERTIES:" or
+            String.starts_with?(trimmed, "SCHEDULED:") or
+            String.starts_with?(trimmed, "DEADLINE:") or
+            String.starts_with?(trimmed, "CLOSED:")
+
+        _ ->
+          false
+      end
+    end)
   end
 end

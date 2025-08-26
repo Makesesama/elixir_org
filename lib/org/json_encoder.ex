@@ -14,7 +14,8 @@ defmodule Org.JSONEncoder do
       type: "document",
       comments: doc.comments,
       sections: Enum.map(doc.sections, &encode/1),
-      contents: Enum.map(doc.contents, &encode/1)
+      contents: Enum.map(doc.contents, &encode/1),
+      file_properties: doc.file_properties
     }
   end
 
