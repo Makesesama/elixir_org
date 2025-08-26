@@ -39,8 +39,8 @@ You can see an example in [examples directory](./example)
 - [x] Custom TODO keywords
 - [x] Metadata and Properties
 - [x] File property comments
+- [x] Handling org-directories and multi file parsing
 - [ ] Streaming of files
 - [ ] Denote Support
 - [ ] Org Roam support
 - [ ] Something like org-ql
-- [ ] Handling org-directories and multi file parsing
