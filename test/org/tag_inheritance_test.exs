@@ -45,6 +45,47 @@ defmodule Org.TagInheritanceTest do
   end
 
   describe "tag inheritance" do
+    test "serialization shows inherited vs direct tags" do
+      content = """
+      #+FILETAGS: global
+
+      * Parent :work:
+      ** Child :urgent:
+      """
+
+      doc = Org.Parser.parse(content, mode: :flexible)
+      serialized = Org.to_org_string(doc)
+
+      # Parent should show (global) for inherited file tag, work for direct
+      assert String.contains?(serialized, "* Parent :(global):work:")
+
+      # Child should show (global) (work) for inherited tags, urgent for direct
+      assert String.contains?(serialized, "** Child :(global):(work):urgent:")
+    end
+
+    test "section helper functions return correct tag types" do
+      content = """
+      #+FILETAGS: global
+
+      * Parent :work:
+      ** Child :urgent:
+      """
+
+      doc = Org.Parser.parse(content, mode: :flexible)
+      parent = Org.section(doc, ["Parent"])
+      child = Org.section(doc, ["Parent", "Child"])
+
+      # Parent tags
+      assert Org.Section.inherited_tags(parent) == ["global"]
+      assert Org.Section.direct_tags(parent) == ["work"]
+      assert Org.Section.effective_tags(parent) == ["global", "work"]
+
+      # Child tags
+      assert Org.Section.inherited_tags(child) == ["global", "work"]
+      assert Org.Section.direct_tags(child) == ["urgent"]
+      assert Org.Section.effective_tags(child) == ["global", "work", "urgent"]
+    end
+
     test "top-level sections inherit file tags" do
       doc =
         Org.load_string("""
@@ -290,12 +331,12 @@ defmodule Org.TagInheritanceTest do
       doc = Org.load_string(original_text)
       serialized = Org.to_org_string(doc)
 
-      # Serialized version should show all effective tags (inherited + direct)
-      assert String.contains?(serialized, "* Parent :global:work:")
-      assert String.contains?(serialized, "** Child :global:work:urgent:")
+      # Serialized version should show inherited tags in parentheses and direct tags normally
+      assert String.contains?(serialized, "* Parent :(global):work:")
+      assert String.contains?(serialized, "** Child :(global):(work):urgent:")
 
       # When reparsed, should maintain the same effective tags
-      reparsed = Org.load_string(serialized)
+      reparsed = Org.Parser.parse(serialized, mode: :flexible)
       parent = Org.section(reparsed, ["Parent"])
       child = Org.section(reparsed, ["Parent", "Child"])
 

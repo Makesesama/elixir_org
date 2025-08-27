@@ -273,7 +273,7 @@ defmodule Org.Writer do
     stars = String.duplicate("*", level)
     todo_part = if section.todo_keyword, do: " #{section.todo_keyword}", else: ""
     priority_part = if section.priority, do: " [##{section.priority}]", else: ""
-    tags_part = render_section_tags(section.tags)
+    tags_part = render_section_tags_from_struct(section)
     header = "#{stars}#{todo_part}#{priority_part} #{section.title}#{tags_part}"
 
     lines = [header]
@@ -293,11 +293,26 @@ defmodule Org.Writer do
     lines
   end
 
-  defp render_section_tags([]), do: ""
+  # Handle Section structs with inherited_tags field
+  defp render_section_tags_from_struct(%Org.Section{tags: [], inherited_tags: []}), do: ""
 
-  defp render_section_tags(tags) when is_list(tags) do
-    tags_string = tags |> Enum.join(":")
-    " :#{tags_string}:"
+  defp render_section_tags_from_struct(%Org.Section{tags: tags, inherited_tags: inherited_tags}) do
+    # Get direct tags (tags that are not inherited)
+    direct_tags = tags -- inherited_tags
+
+    # Build tag representation showing inheritance
+    inherited_part = if inherited_tags != [], do: Enum.map(inherited_tags, &"(#{&1})"), else: []
+    direct_part = direct_tags
+
+    # Combine inherited (in parentheses) and direct tags
+    all_tag_parts = inherited_part ++ direct_part
+
+    if all_tag_parts == [] do
+      ""
+    else
+      tags_string = all_tag_parts |> Enum.join(":")
+      " :#{tags_string}:"
+    end
   end
 
   defp contents_to_lines(contents) do

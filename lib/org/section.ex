@@ -3,6 +3,7 @@ defmodule Org.Section do
             todo_keyword: nil,
             priority: nil,
             tags: [],
+            inherited_tags: [],
             properties: %{},
             metadata: %{},
             children: [],
@@ -32,6 +33,7 @@ defmodule Org.Section do
           todo_keyword: String.t() | nil,
           priority: String.t() | nil,
           tags: [String.t()],
+          inherited_tags: [String.t()],
           properties: %{String.t() => String.t()},
           metadata: %{
             optional(:scheduled) => Org.Timestamp.t(),
@@ -86,6 +88,21 @@ defmodule Org.Section do
 
   def contents(%Org.Section{contents: contents}) do
     contents
+  end
+
+  @doc "Returns only the direct tags (not inherited) for a section"
+  def direct_tags(%Org.Section{tags: tags, inherited_tags: inherited_tags}) do
+    tags -- inherited_tags
+  end
+
+  @doc "Returns all effective tags (inherited + direct) for a section"
+  def effective_tags(%Org.Section{tags: tags}) do
+    tags
+  end
+
+  @doc "Returns only the inherited tags for a section"
+  def inherited_tags(%Org.Section{inherited_tags: inherited_tags}) do
+    inherited_tags
   end
 
   @doc "Adds content to the last prepended section"

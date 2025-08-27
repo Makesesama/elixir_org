@@ -930,17 +930,21 @@ defmodule Org.Parser do
   end
 
   defp apply_section_tag_inheritance(section, file_tags, parent_tags) do
-    # Compute effective tags: file_tags + parent_tags + section.tags
+    # Compute inherited tags: file_tags + parent_tags
     inherited_tags = file_tags ++ parent_tags
-    effective_tags = inherited_tags ++ section.tags
 
-    # Remove duplicates while preserving order (file tags first, then inherited, then own)
-    unique_tags = Enum.uniq(effective_tags)
+    # Remove duplicates from inherited tags while preserving order (file tags first, then parent)
+    unique_inherited_tags = Enum.uniq(inherited_tags)
+
+    # Effective tags are inherited + direct tags
+    effective_tags = unique_inherited_tags ++ section.tags
+    unique_effective_tags = Enum.uniq(effective_tags)
 
     # Apply inheritance to children recursively
-    children_with_inheritance = Enum.map(section.children, &apply_section_tag_inheritance(&1, file_tags, unique_tags))
+    children_with_inheritance =
+      Enum.map(section.children, &apply_section_tag_inheritance(&1, file_tags, unique_effective_tags))
 
-    %{section | tags: unique_tags, children: children_with_inheritance}
+    %{section | tags: unique_effective_tags, inherited_tags: unique_inherited_tags, children: children_with_inheritance}
   end
 
   # Section management
