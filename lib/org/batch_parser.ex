@@ -13,6 +13,15 @@ defmodule Org.BatchParser do
       # Parse all org files in a directory
       {:ok, workspace} = Org.BatchParser.parse_directory("/path/to/org/files")
       
+      # Parse with context (recommended for better performance)
+      context = Org.Parser.Context.new([Org.Plugins.Denote, Org.Plugins.CodeBlock])
+      {:ok, workspace} = Org.BatchParser.parse_directory("/path/to/org/files", context: context)
+      
+      # Parse with plugins
+      {:ok, workspace} = Org.BatchParser.parse_directory("/path/to/org/files", 
+        plugins: [Org.Plugins.Denote]
+      )
+      
       # Access parsed documents for external processing
       documents = Enum.map(workspace.file_entries, & &1.document)
       
@@ -32,7 +41,9 @@ defmodule Org.BatchParser do
           extensions: [String.t()],
           parallel: boolean(),
           cache: boolean(),
-          include_archived: boolean()
+          include_archived: boolean(),
+          context: Org.Parser.Context.t() | nil,
+          plugins: [module()] | nil
         ]
 
   @default_options [
@@ -40,7 +51,9 @@ defmodule Org.BatchParser do
     extensions: [".org"],
     parallel: true,
     cache: true,
-    include_archived: false
+    include_archived: false,
+    context: nil,
+    plugins: nil
   ]
 
   # ============================================================================
@@ -57,6 +70,8 @@ defmodule Org.BatchParser do
   - `:parallel` - Parse files in parallel (default: true)
   - `:cache` - Cache parsed results (default: true)
   - `:include_archived` - Include archived items (default: false)
+  - `:context` - Parser context with pre-compiled plugins (default: nil)
+  - `:plugins` - List of plugins to use for parsing (default: nil)
 
   ## Examples
 
@@ -65,6 +80,15 @@ defmodule Org.BatchParser do
       {:ok, workspace} = Org.BatchParser.parse_directory("~/org", 
         recursive: false,
         extensions: [".org", ".txt"]
+      )
+      
+      # With context for better performance
+      context = Org.Parser.Context.new([Org.Plugins.Denote, Org.Plugins.CodeBlock])
+      {:ok, workspace} = Org.BatchParser.parse_directory("~/org", context: context)
+      
+      # With direct plugins
+      {:ok, workspace} = Org.BatchParser.parse_directory("~/org", 
+        plugins: [Org.Plugins.Denote, Org.Plugins.CodeBlock]
       )
   """
   @spec parse_directory(String.t(), parse_options()) :: {:ok, Workspace.t()} | {:error, term()}
@@ -259,25 +283,25 @@ defmodule Org.BatchParser do
 
   defp parse_file_list(file_paths, opts) do
     if opts[:parallel] do
-      parse_files_parallel(file_paths)
+      parse_files_parallel(file_paths, opts)
     else
-      parse_files_sequential(file_paths)
+      parse_files_sequential(file_paths, opts)
     end
   end
 
   defp parse_file_list_cached(file_paths, cache, opts) do
     if opts[:parallel] do
-      parse_files_parallel_cached(file_paths, cache)
+      parse_files_parallel_cached(file_paths, cache, opts)
     else
-      parse_files_sequential_cached(file_paths, cache)
+      parse_files_sequential_cached(file_paths, cache, opts)
     end
   end
 
   defp parse_content_list(content_list, opts) do
     if opts[:parallel] do
-      parse_content_parallel(content_list)
+      parse_content_parallel(content_list, opts)
     else
-      parse_content_sequential(content_list)
+      parse_content_sequential(content_list, opts)
     end
   end
 
@@ -360,11 +384,11 @@ defmodule Org.BatchParser do
   # Private Functions - Content Parsing
   # ============================================================================
 
-  defp parse_content_parallel(content_list) do
+  defp parse_content_parallel(content_list, opts) do
     tasks =
       Enum.with_index(content_list)
       |> Enum.map(fn {content_item, index} ->
-        Task.async(fn -> parse_single_content(content_item, index) end)
+        Task.async(fn -> parse_single_content(content_item, index, opts) end)
       end)
 
     results = Task.await_many(tasks, 30_000)
@@ -379,11 +403,11 @@ defmodule Org.BatchParser do
     end
   end
 
-  defp parse_content_sequential(content_list) do
+  defp parse_content_sequential(content_list, opts) do
     results =
       content_list
       |> Enum.with_index()
-      |> Enum.map(fn {content_item, index} -> parse_single_content(content_item, index) end)
+      |> Enum.map(fn {content_item, index} -> parse_single_content(content_item, index, opts) end)
 
     errors = Enum.filter(results, &match?({:error, _}, &1))
 
@@ -395,9 +419,9 @@ defmodule Org.BatchParser do
     end
   end
 
-  defp parse_single_content(content_item, index) do
+  defp parse_single_content(content_item, index, opts) do
     {name, content} = extract_name_and_content(content_item, index)
-    doc = Org.load_string(content)
+    doc = parse_content_with_options(content, opts)
     entry = build_file_entry_from_document(name, doc)
     {:ok, entry}
   rescue
@@ -429,10 +453,10 @@ defmodule Org.BatchParser do
   # Private Functions - Cached File Parsing
   # ============================================================================
 
-  defp parse_files_sequential_cached(file_paths, cache) do
+  defp parse_files_sequential_cached(file_paths, cache, opts) do
     {entries, updated_cache, errors} =
       Enum.reduce(file_paths, {[], cache, []}, fn path, {acc_entries, acc_cache, acc_errors} ->
-        case parse_single_file_cached(path, acc_cache) do
+        case parse_single_file_cached(path, acc_cache, opts) do
           {:ok, entry, new_cache} ->
             {[entry | acc_entries], new_cache, acc_errors}
 
@@ -448,7 +472,7 @@ defmodule Org.BatchParser do
     end
   end
 
-  defp parse_files_parallel_cached(file_paths, cache) do
+  defp parse_files_parallel_cached(file_paths, cache, opts) do
     # For parallel caching, we need to be careful about cache state
     # First, check cache for all files and separate hits from misses
     {cache_hits, cache_misses, updated_cache} =
@@ -463,7 +487,7 @@ defmodule Org.BatchParser do
       end)
 
     # Parse cache misses in parallel
-    case parse_files_parallel(cache_misses) do
+    case parse_files_parallel(cache_misses, opts) do
       {:ok, new_entries} ->
         # Store new entries in cache
         final_cache =
@@ -480,13 +504,13 @@ defmodule Org.BatchParser do
     end
   end
 
-  defp parse_single_file_cached(path, cache) do
+  defp parse_single_file_cached(path, cache, opts) do
     case Cache.get(cache, path) do
       {:hit, entry, updated_cache} ->
         {:ok, entry, updated_cache}
 
       {:miss, updated_cache} ->
-        case parse_single_file(path) do
+        case parse_single_file(path, opts) do
           {:ok, entry} ->
             final_cache = Cache.put(updated_cache, path, entry)
             {:ok, entry, final_cache}
@@ -501,10 +525,10 @@ defmodule Org.BatchParser do
   # Private Functions - File Parsing
   # ============================================================================
 
-  defp parse_files_parallel(file_paths) do
+  defp parse_files_parallel(file_paths, opts) do
     tasks =
       Enum.map(file_paths, fn path ->
-        Task.async(fn -> parse_single_file(path) end)
+        Task.async(fn -> parse_single_file(path, opts) end)
       end)
 
     results = Task.await_many(tasks, 30_000)
@@ -519,8 +543,8 @@ defmodule Org.BatchParser do
     end
   end
 
-  defp parse_files_sequential(file_paths) do
-    results = Enum.map(file_paths, &parse_single_file/1)
+  defp parse_files_sequential(file_paths, opts) do
+    results = Enum.map(file_paths, fn path -> parse_single_file(path, opts) end)
 
     errors = Enum.filter(results, &match?({:error, _}, &1))
 
@@ -532,9 +556,9 @@ defmodule Org.BatchParser do
     end
   end
 
-  defp parse_single_file(path) do
+  defp parse_single_file(path, opts) do
     with {:ok, content} <- File.read(path),
-         doc <- Org.load_string(content) do
+         doc <- parse_content_with_options(content, opts) do
       entry = build_file_entry(path, doc)
       {:ok, entry}
     else
@@ -697,6 +721,26 @@ defmodule Org.BatchParser do
     case File.stat(path) do
       {:ok, %{mtime: mtime}} -> mtime
       _ -> nil
+    end
+  end
+
+  # ============================================================================
+  # Private Functions - Parser Integration
+  # ============================================================================
+
+  defp parse_content_with_options(content, opts) do
+    context = opts[:context]
+    plugins = opts[:plugins]
+
+    cond do
+      context != nil ->
+        Org.Parser.parse(content, context: context)
+
+      plugins != nil ->
+        Org.Parser.parse(content, plugins: plugins)
+
+      true ->
+        Org.load_string(content)
     end
   end
 end
