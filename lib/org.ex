@@ -42,7 +42,7 @@ defmodule Org do
   def load_string(data, load_mode \\ :document)
 
   def load_string(data, :document) do
-    Org.Parser.parse(data)
+    Org.Parser.parse(data, mode: :flexible)
   end
 
   def load_string(data, :tokens) do
