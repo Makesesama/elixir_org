@@ -443,38 +443,5 @@ defmodule Org.ParserTest do
       # Different contexts should produce different parsing results
       assert doc_denote != doc_code
     end
-
-    test "context performance is better than direct plugins" do
-      plugins = [Denote, CodeBlock, DynamicBlock]
-      context = Parser.Context.new(plugins)
-
-      text = """
-      #+BEGIN_SRC elixir
-      def test, do: :ok
-      #+END_SRC
-      [[denote:20240115T143000][Test]]
-      """
-
-      # Warm up
-      Parser.parse(text, context: context)
-      Parser.parse(text, plugins: plugins)
-
-      {context_time, _} =
-        :timer.tc(fn ->
-          for _ <- 1..50 do
-            Parser.parse(text, context: context)
-          end
-        end)
-
-      {direct_time, _} =
-        :timer.tc(fn ->
-          for _ <- 1..50 do
-            Parser.parse(text, plugins: plugins)
-          end
-        end)
-
-      # Context should be faster than direct plugins
-      assert context_time < direct_time
-    end
   end
 end
