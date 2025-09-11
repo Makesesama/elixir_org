@@ -55,7 +55,7 @@ defmodule Org.TimestampTest do
     test "parses timestamp with repeater" do
       {:ok, timestamp} = Timestamp.parse("<2024-01-15 Mon +1w>")
 
-      assert timestamp.repeater == %{count: 1, unit: :week}
+      assert timestamp.repeater == %{count: 1, unit: :week, type: :regular}
     end
 
     test "parses timestamp with warning" do
@@ -67,7 +67,7 @@ defmodule Org.TimestampTest do
     test "parses timestamp with both repeater and warning" do
       {:ok, timestamp} = Timestamp.parse("<2024-01-15 Mon +1w -2d>")
 
-      assert timestamp.repeater == %{count: 1, unit: :week}
+      assert timestamp.repeater == %{count: 1, unit: :week, type: :regular}
       assert timestamp.warning == %{count: 2, unit: :day}
     end
 
@@ -79,17 +79,17 @@ defmodule Org.TimestampTest do
       assert timestamp.day_name == "Mon"
       assert timestamp.start_time == ~T[14:30:00]
       assert timestamp.end_time == ~T[16:00:00]
-      assert timestamp.repeater == %{count: 1, unit: :week}
+      assert timestamp.repeater == %{count: 1, unit: :week, type: :regular}
       assert timestamp.warning == %{count: 2, unit: :day}
     end
 
     test "parses different time units" do
       test_cases = [
-        {"+5h", %{count: 5, unit: :hour}},
-        {"+3d", %{count: 3, unit: :day}},
-        {"+2w", %{count: 2, unit: :week}},
-        {"+1m", %{count: 1, unit: :month}},
-        {"+1y", %{count: 1, unit: :year}}
+        {"+5h", %{count: 5, unit: :hour, type: :regular}},
+        {"+3d", %{count: 3, unit: :day, type: :regular}},
+        {"+2w", %{count: 2, unit: :week, type: :regular}},
+        {"+1m", %{count: 1, unit: :month, type: :regular}},
+        {"+1y", %{count: 1, unit: :year, type: :regular}}
       ]
 
       for {suffix, expected} <- test_cases do
@@ -374,6 +374,140 @@ defmodule Org.TimestampTest do
       }
 
       assert Timestamp.end_datetime(timestamp) == nil
+    end
+  end
+
+  describe "timezone support" do
+    test "parses timestamps with timezone offsets" do
+      assert {:ok, timestamp} = Timestamp.parse("<2024-01-15 14:30 +02:00>")
+      assert timestamp.timezone == "+02:00"
+      assert timestamp.date == ~D[2024-01-15]
+      assert timestamp.start_time == ~T[14:30:00]
+    end
+
+    test "parses timestamps with negative timezone offsets" do
+      assert {:ok, timestamp} = Timestamp.parse("<2024-01-15 14:30 -05:00>")
+      assert timestamp.timezone == "-05:00"
+    end
+
+    test "parses timestamps with named timezones" do
+      assert {:ok, timestamp} = Timestamp.parse("<2024-01-15 14:30 UTC>")
+      assert timestamp.timezone == "UTC"
+    end
+
+    test "parses timestamps with timezone abbreviations" do
+      assert {:ok, timestamp} = Timestamp.parse("<2024-01-15 14:30 EST>")
+      assert timestamp.timezone == "EST"
+    end
+
+    test "formats timestamps with timezones correctly" do
+      timestamp = %Timestamp{
+        type: :active,
+        date: ~D[2024-01-15],
+        start_time: ~T[14:30:00],
+        timezone: "+02:00",
+        raw: "<2024-01-15 14:30 +02:00>"
+      }
+
+      assert Timestamp.to_string(timestamp) == "<2024-01-15 14:30 +02:00>"
+    end
+  end
+
+  describe "enhanced repeater types" do
+    test "parses regular repeater (+)" do
+      assert {:ok, timestamp} = Timestamp.parse("<2024-01-15 14:30 +1w>")
+      assert timestamp.repeater == %{count: 1, unit: :week, type: :regular}
+    end
+
+    test "parses cumulative repeater (++)" do
+      assert {:ok, timestamp} = Timestamp.parse("<2024-01-15 14:30 ++1w>")
+      assert timestamp.repeater == %{count: 1, unit: :week, type: :cumulative}
+    end
+
+    test "parses catch-up repeater (.+)" do
+      assert {:ok, timestamp} = Timestamp.parse("<2024-01-15 14:30 .+1w>")
+      assert timestamp.repeater == %{count: 1, unit: :week, type: :catch_up}
+    end
+
+    test "formats regular repeater correctly" do
+      timestamp = %Timestamp{
+        type: :active,
+        date: ~D[2024-01-15],
+        start_time: ~T[14:30:00],
+        repeater: %{count: 1, unit: :week, type: :regular},
+        raw: "<2024-01-15 14:30 +1w>"
+      }
+
+      assert Timestamp.to_string(timestamp) == "<2024-01-15 14:30 +1w>"
+    end
+
+    test "formats cumulative repeater correctly" do
+      timestamp = %Timestamp{
+        type: :active,
+        date: ~D[2024-01-15],
+        start_time: ~T[14:30:00],
+        repeater: %{count: 2, unit: :day, type: :cumulative},
+        raw: "<2024-01-15 14:30 ++2d>"
+      }
+
+      assert Timestamp.to_string(timestamp) == "<2024-01-15 14:30 ++2d>"
+    end
+
+    test "formats catch-up repeater correctly" do
+      timestamp = %Timestamp{
+        type: :active,
+        date: ~D[2024-01-15],
+        start_time: ~T[14:30:00],
+        repeater: %{count: 1, unit: :month, type: :catch_up},
+        raw: "<2024-01-15 14:30 .+1m>"
+      }
+
+      assert Timestamp.to_string(timestamp) == "<2024-01-15 14:30 .+1m>"
+    end
+
+    test "maintains backwards compatibility for repeaters without type" do
+      # Old format should still work
+      timestamp = %Timestamp{
+        type: :active,
+        date: ~D[2024-01-15],
+        start_time: ~T[14:30:00],
+        repeater: %{count: 1, unit: :week},
+        raw: "<2024-01-15 14:30 +1w>"
+      }
+
+      assert Timestamp.to_string(timestamp) == "<2024-01-15 14:30 +1w>"
+    end
+  end
+
+  describe "complex timestamp combinations" do
+    test "parses timestamps with all components" do
+      assert {:ok, timestamp} = Timestamp.parse("<2024-01-15 Mon 14:30-16:00 EST ++1w -2d>")
+
+      assert timestamp.date == ~D[2024-01-15]
+      assert timestamp.day_name == "Mon"
+      assert timestamp.start_time == ~T[14:30:00]
+      assert timestamp.end_time == ~T[16:00:00]
+      assert timestamp.timezone == "EST"
+      assert timestamp.repeater == %{count: 1, unit: :week, type: :cumulative}
+      assert timestamp.warning == %{count: 2, unit: :day}
+    end
+
+    test "round-trip parsing preserves all data" do
+      original = "<2024-01-15 Mon 14:30-16:00 EST .+1m -1w>"
+
+      assert {:ok, timestamp} = Timestamp.parse(original)
+      formatted = Timestamp.to_string(timestamp)
+      assert {:ok, reparsed} = Timestamp.parse(formatted)
+
+      assert timestamp == reparsed
+    end
+
+    test "parses inactive timestamps with complex patterns" do
+      assert {:ok, timestamp} = Timestamp.parse("[2024-01-15 Mon 14:30 UTC ++1m -1w]")
+
+      assert timestamp.type == :inactive
+      assert timestamp.timezone == "UTC"
+      assert timestamp.repeater.type == :cumulative
     end
   end
 end

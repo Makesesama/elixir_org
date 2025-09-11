@@ -185,7 +185,7 @@ defmodule Org.PropertyDrawerTest do
       assert metadata.scheduled.type == :active
       assert metadata.scheduled.date == ~D[2024-01-15]
       assert metadata.scheduled.day_name == "Mon"
-      assert metadata.scheduled.repeater == %{count: 1, unit: :week}
+      assert metadata.scheduled.repeater == %{count: 1, unit: :week, type: :regular}
 
       assert remaining == ["Content"]
     end

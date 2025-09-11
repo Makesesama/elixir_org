@@ -476,17 +476,25 @@ defmodule Org.Parser do
   end
 
   defp add_properties(parser, properties) do
-    # Add to most recent section or to document if no sections
+    # Add to the deepest current section or to document if no sections
     case parser.document.sections do
       [] ->
         # Add to document level (as metadata)
         doc = %{parser.document | file_properties: Map.merge(parser.document.file_properties, properties)}
         %{parser | document: doc}
 
-      [section | rest] ->
-        updated_section = %{section | properties: Map.merge(section.properties, properties)}
-        doc = %{parser.document | sections: [updated_section | rest]}
-        %{parser | document: doc}
+      sections ->
+        # Find and update the deepest current section
+        case add_properties_to_deepest_section(sections, properties) do
+          {updated_sections, :added} ->
+            doc = %{parser.document | sections: updated_sections}
+            %{parser | document: doc}
+
+          {_sections, :not_added} ->
+            # Fallback: add to document level
+            doc = %{parser.document | file_properties: Map.merge(parser.document.file_properties, properties)}
+            %{parser | document: doc}
+        end
     end
   end
 
@@ -756,12 +764,17 @@ defmodule Org.Parser do
         # No sections, cannot add metadata - just return parser
         parser
 
-      [current_section | rest_sections] ->
-        # Add metadata to the most recent section
-        updated_metadata = Map.put(current_section.metadata, key, value)
-        updated_section = %{current_section | metadata: updated_metadata}
-        doc = %{parser.document | sections: [updated_section | rest_sections]}
-        %{parser | document: doc}
+      sections ->
+        # Find and update the deepest current section
+        case add_metadata_to_deepest_section(sections, key, value) do
+          {updated_sections, :added} ->
+            doc = %{parser.document | sections: updated_sections}
+            %{parser | document: doc}
+
+          {_sections, :not_added} ->
+            # Fallback: just return parser unchanged
+            parser
+        end
     end
   end
 
@@ -981,6 +994,58 @@ defmodule Org.Parser do
           [] ->
             # No children to nest under, add at current level
             %{parent | children: [section | parent.children]}
+        end
+    end
+  end
+
+  # Helper to add metadata to the deepest section
+  defp add_metadata_to_deepest_section([], _key, _value), do: {[], :not_added}
+
+  defp add_metadata_to_deepest_section([section | rest], key, value) do
+    case section.children do
+      [] ->
+        # This is the deepest section, add metadata here
+        updated_metadata = Map.put(section.metadata, key, value)
+        updated_section = %{section | metadata: updated_metadata}
+        {[updated_section | rest], :added}
+
+      children ->
+        # Try to add to children first
+        case add_metadata_to_deepest_section(children, key, value) do
+          {updated_children, :added} ->
+            updated_section = %{section | children: updated_children}
+            {[updated_section | rest], :added}
+
+          {_children, :not_added} ->
+            # Children couldn't accept metadata, add to current section
+            updated_metadata = Map.put(section.metadata, key, value)
+            updated_section = %{section | metadata: updated_metadata}
+            {[updated_section | rest], :added}
+        end
+    end
+  end
+
+  # Helper to add properties to the deepest section
+  defp add_properties_to_deepest_section([], _properties), do: {[], :not_added}
+
+  defp add_properties_to_deepest_section([section | rest], properties) do
+    case section.children do
+      [] ->
+        # This is the deepest section, add properties here
+        updated_section = %{section | properties: Map.merge(section.properties, properties)}
+        {[updated_section | rest], :added}
+
+      children ->
+        # Try to add to children first
+        case add_properties_to_deepest_section(children, properties) do
+          {updated_children, :added} ->
+            updated_section = %{section | children: updated_children}
+            {[updated_section | rest], :added}
+
+          {_children, :not_added} ->
+            # Children couldn't accept properties, add to current section
+            updated_section = %{section | properties: Map.merge(section.properties, properties)}
+            {[updated_section | rest], :added}
         end
     end
   end

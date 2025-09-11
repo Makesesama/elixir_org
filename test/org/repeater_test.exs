@@ -9,7 +9,7 @@ defmodule Org.RepeaterTest do
 
       assert next.date == ~D[2024-01-16]
       assert next.day_name == "Tue"
-      assert next.repeater == %{count: 1, unit: :day}
+      assert next.repeater == %{count: 1, unit: :day, type: :regular}
     end
 
     test "calculates next occurrence for weekly repeater" do
@@ -18,7 +18,7 @@ defmodule Org.RepeaterTest do
 
       assert next.date == ~D[2024-01-22]
       assert next.day_name == "Mon"
-      assert next.repeater == %{count: 1, unit: :week}
+      assert next.repeater == %{count: 1, unit: :week, type: :regular}
     end
 
     test "calculates next occurrence for monthly repeater" do
@@ -27,7 +27,7 @@ defmodule Org.RepeaterTest do
 
       assert next.date == ~D[2024-02-15]
       assert next.day_name == "Thu"
-      assert next.repeater == %{count: 1, unit: :month}
+      assert next.repeater == %{count: 1, unit: :month, type: :regular}
     end
 
     test "calculates next occurrence for yearly repeater" do
@@ -36,7 +36,7 @@ defmodule Org.RepeaterTest do
 
       assert next.date == ~D[2025-01-15]
       assert next.day_name == "Wed"
-      assert next.repeater == %{count: 1, unit: :year}
+      assert next.repeater == %{count: 1, unit: :year, type: :regular}
     end
 
     test "handles leap year edge case" do
@@ -451,8 +451,8 @@ defmodule Org.RepeaterTest do
       reparsed = Org.load_string(serialized)
 
       task = Org.section(reparsed, ["Daily Standup"])
-      assert task.metadata.scheduled.repeater == %{count: 1, unit: :day}
-      assert task.metadata.deadline.repeater == %{count: 1, unit: :day}
+      assert task.metadata.scheduled.repeater == %{count: 1, unit: :day, type: :regular}
+      assert task.metadata.deadline.repeater == %{count: 1, unit: :day, type: :regular}
       assert task.metadata.scheduled.date == ~D[2024-01-16]
       assert task.metadata.deadline.date == ~D[2024-01-16]
     end

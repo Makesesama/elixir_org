@@ -217,7 +217,7 @@ defmodule Org.MetadataIntegrationTest do
       # Check deadline timestamp encoding
       deadline_json = json_data.metadata.deadline
       assert deadline_json.type == "timestamp"
-      assert deadline_json.repeater == %{count: 1, unit: :week}
+      assert deadline_json.repeater == %{count: 1, unit: :week, type: :regular}
       assert deadline_json.warning == %{count: 2, unit: :day}
     end
   end

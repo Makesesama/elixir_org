@@ -389,6 +389,64 @@ defmodule Org.ParserTest do
     end
   end
 
+  describe "property association issues" do
+    test "properties don't bubble up from child to parent sections" do
+      text = """
+      * My Test Calendar
+
+      ** TODO Sample task
+      SCHEDULED: <2025-01-15>
+      :PROPERTIES:
+      :UID: 08b3a249-b3e6-4e3f-badf-ab4af7168614
+      :END:
+
+      ** testi
+      SCHEDULED: <2025-09-11 14:00>
+      DEADLINE: <2025-09-11 15:00>
+      :PROPERTIES:
+      :UID: 5f908f03-33e2-4b00-a7d9-625e79c78376
+      :END:
+      """
+
+      doc = Parser.parse(text)
+
+      # Should have 1 top-level section
+      assert length(doc.sections) == 1
+
+      [parent_section] = doc.sections
+      assert parent_section.title == "My Test Calendar"
+
+      # Parent section should NOT have properties or metadata from children
+      assert parent_section.properties == %{}
+      assert parent_section.metadata == %{}
+
+      # Should have 2 child sections
+      assert length(parent_section.children) == 2
+
+      [sample_task, testi] = parent_section.children
+
+      # First child: "Sample task"
+      assert sample_task.title == "Sample task"
+      assert sample_task.todo_keyword == "TODO"
+      assert sample_task.properties["UID"] == "08b3a249-b3e6-4e3f-badf-ab4af7168614"
+      assert sample_task.metadata.scheduled
+      assert sample_task.metadata.scheduled.date == ~D[2025-01-15]
+      # Should NOT have deadline
+      assert Map.get(sample_task.metadata, :deadline) == nil
+
+      # Second child: "testi"
+      assert testi.title == "testi"
+      assert testi.todo_keyword == nil
+      assert testi.properties["UID"] == "5f908f03-33e2-4b00-a7d9-625e79c78376"
+      assert testi.metadata.scheduled
+      assert testi.metadata.scheduled.date == ~D[2025-09-11]
+      assert testi.metadata.scheduled.start_time == ~T[14:00:00]
+      assert testi.metadata.deadline
+      assert testi.metadata.deadline.date == ~D[2025-09-11]
+      assert testi.metadata.deadline.start_time == ~T[15:00:00]
+    end
+  end
+
   describe "Context integration" do
     test "parses with context instead of direct plugins" do
       context = Parser.Context.new([CodeBlock])
