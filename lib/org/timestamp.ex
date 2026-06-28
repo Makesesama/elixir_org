@@ -1,4 +1,6 @@
 defmodule Org.Timestamp do
+  alias Org.Syntax.TimestampParser
+
   @moduledoc """
   Parsing and handling of org-mode timestamps.
 
@@ -90,15 +92,9 @@ defmodule Org.Timestamp do
   def parse(timestamp_str) do
     trimmed = String.trim(timestamp_str)
 
-    case detect_timestamp_type(trimmed) do
-      {:ok, type, content} ->
-        case parse_timestamp_content(content, type, trimmed) do
-          {:ok, timestamp} -> {:ok, timestamp}
-          {:error, reason} -> {:error, reason}
-        end
-
-      {:error, reason} ->
-        {:error, reason}
+    case TimestampParser.parse(trimmed) do
+      {:ok, parsed} -> build_timestamp(parsed, trimmed)
+      {:error, reason} -> {:error, reason}
     end
   end
 
@@ -112,6 +108,28 @@ defmodule Org.Timestamp do
       {:error, reason} -> raise ArgumentError, "Invalid timestamp: #{reason}"
     end
   end
+
+  defp build_timestamp(%{type: type, date: %Date{} = date} = parsed, raw)
+       when type in [:active, :inactive] do
+    {:ok,
+     %__MODULE__{
+       type: type,
+       date: date,
+       start_time: Map.get(parsed, :start_time),
+       end_time: Map.get(parsed, :end_time),
+       day_name: normalize_string(Map.get(parsed, :day_name)),
+       repeater: Map.get(parsed, :repeater),
+       warning: Map.get(parsed, :warning),
+       timezone: normalize_string(Map.get(parsed, :timezone)),
+       raw: raw
+     }}
+  end
+
+  defp build_timestamp(_, _raw), do: {:error, "Invalid timestamp format"}
+
+  defp normalize_string(nil), do: nil
+  defp normalize_string(""), do: nil
+  defp normalize_string(str), do: String.trim(str)
 
   @doc """
   Renders a timestamp back to org-mode format.
@@ -223,225 +241,6 @@ defmodule Org.Timestamp do
 
   defp format_warning(nil), do: ""
   defp format_warning(%{count: count, unit: unit}), do: " -#{count}#{unit_to_char(unit)}"
-
-  defp detect_timestamp_type(str) do
-    cond do
-      String.starts_with?(str, "<") and String.ends_with?(str, ">") ->
-        content = str |> String.slice(1..-2//1)
-        {:ok, :active, content}
-
-      String.starts_with?(str, "[") and String.ends_with?(str, "]") ->
-        content = str |> String.slice(1..-2//1)
-        {:ok, :inactive, content}
-
-      true ->
-        {:error, "Invalid timestamp format: must be enclosed in < > or [ ]"}
-    end
-  end
-
-  defp parse_timestamp_content(content, type, raw) do
-    # More flexible regex to handle various timestamp formats
-    # Matches: YYYY-MM-DD [optional day] [optional time] [optional repeater] [optional warning]
-    trimmed_content = String.trim(content)
-
-    # First extract the date part (required)
-    case Regex.run(~r/^(\d{4}-\d{2}-\d{2})/, trimmed_content) do
-      [_, date_str] ->
-        parse_date_and_components(date_str, trimmed_content, type, raw)
-
-      nil ->
-        {:error, "Invalid timestamp format: no valid date found in '#{content}'"}
-    end
-  end
-
-  defp parse_date_and_components(date_str, trimmed_content, type, raw) do
-    case Date.from_iso8601(date_str) do
-      {:ok, date} ->
-        # Parse the rest of the timestamp after the date
-        remaining = String.trim_leading(trimmed_content, date_str)
-
-        case parse_timestamp_components(remaining) do
-          {:ok, parsed_components} ->
-            timestamp = %__MODULE__{
-              type: type,
-              date: date,
-              start_time: parsed_components.start_time,
-              end_time: parsed_components.end_time,
-              day_name: parsed_components.day_name,
-              repeater: parsed_components.repeater,
-              warning: parsed_components.warning,
-              timezone: parsed_components.timezone,
-              raw: raw
-            }
-
-            {:ok, timestamp}
-
-          {:error, reason} ->
-            {:error, reason}
-        end
-
-      {:error, reason} ->
-        {:error, "Invalid date: #{reason}"}
-    end
-  end
-
-  defp parse_timestamp_components(remaining_str) do
-    # Parse components from the remaining string after date
-    # This can contain: [day_name] [time] [repeater] [warning] in any reasonable order
-
-    # Initialize components
-    components = %{
-      day_name: nil,
-      start_time: nil,
-      end_time: nil,
-      repeater: nil,
-      warning: nil,
-      timezone: nil
-    }
-
-    # Parse each component from the remaining string
-    parse_components_iteratively(String.trim(remaining_str), components)
-  end
-
-  defp parse_components_iteratively("", components), do: {:ok, components}
-
-  defp parse_components_iteratively(str, components) do
-    trimmed = String.trim(str)
-
-    cond do
-      # Try to match time patterns
-      match = Regex.run(~r/^(\d{1,2}:\d{2})(?:-(\d{1,2}:\d{2}))?(.*)$/, trimmed) ->
-        parse_time_component(match, components)
-
-      # Try to match repeater patterns
-      match = Regex.run(~r/^(\+\+|\.\+|\+)(\d+)([hdwmy])(.*)$/, trimmed) ->
-        parse_repeater_component(match, components)
-
-      # Try to match warning patterns
-      match = Regex.run(~r/^-(\d+)([hdwmy])(.*)$/, trimmed) ->
-        parse_warning_component(match, components)
-
-      # Try to match timezone patterns
-      match = Regex.run(~r/^([+-]\d{2}:\d{2}|[+-]\d{4}|UTC|GMT|[A-Z]{3,4})(.*)$/, trimmed) ->
-        parse_timezone_component(match, components)
-
-      # Try to match day name
-      match = Regex.run(~r/^(Mon|Tue|Wed|Thu|Fri|Sat|Sun)(.*)$/, trimmed) ->
-        parse_day_name_component(match, components)
-
-      # Skip whitespace
-      match = Regex.run(~r/^\s+(.*)$/, trimmed) ->
-        [_, rest] = match
-        parse_components_iteratively(rest, components)
-
-      # No more components to parse
-      true ->
-        {:ok, components}
-    end
-  end
-
-  defp parse_time_component([_, start_time_str, end_time_str, rest], components) do
-    with {:ok, start_time} <- parse_time_str(start_time_str),
-         {:ok, end_time} <- parse_time_str(end_time_str) do
-      updated_components = %{components | start_time: start_time, end_time: end_time}
-      parse_components_iteratively(rest, updated_components)
-    else
-      {:error, reason} -> {:error, reason}
-    end
-  end
-
-  defp parse_repeater_component([_, type_str, count_str, unit_str, rest], components) do
-    case parse_repeater(type_str, count_str, unit_str) do
-      {:ok, repeater} ->
-        updated_components = %{components | repeater: repeater}
-        parse_components_iteratively(rest, updated_components)
-
-      {:error, reason} ->
-        {:error, reason}
-    end
-  end
-
-  defp parse_warning_component([_, count_str, unit_str, rest], components) do
-    case parse_warning(count_str, unit_str) do
-      {:ok, warning} ->
-        updated_components = %{components | warning: warning}
-        parse_components_iteratively(rest, updated_components)
-
-      {:error, reason} ->
-        {:error, reason}
-    end
-  end
-
-  defp parse_timezone_component([_, timezone, rest], components) do
-    updated_components = %{components | timezone: timezone}
-    parse_components_iteratively(rest, updated_components)
-  end
-
-  defp parse_day_name_component([_, day_name, rest], components) do
-    updated_components = %{components | day_name: day_name}
-    parse_components_iteratively(rest, updated_components)
-  end
-
-  defp parse_time_str(time_str) when is_nil(time_str) or time_str == "", do: {:ok, nil}
-
-  defp parse_time_str(time_str) when is_binary(time_str) do
-    # Use standard Elixir Time.from_iso8601 with added seconds
-    case Time.from_iso8601(time_str <> ":00") do
-      {:ok, time} -> {:ok, time}
-      {:error, _} -> {:error, "Invalid time format: #{time_str}"}
-    end
-  end
-
-  defp parse_repeater(type_str, count_str, unit_str)
-       when is_nil(type_str) or type_str == "" or is_nil(count_str) or count_str == "" or is_nil(unit_str) or
-              unit_str == "",
-       do: {:ok, nil}
-
-  defp parse_repeater(type_str, count_str, unit_str)
-       when is_binary(type_str) and is_binary(count_str) and is_binary(unit_str) do
-    case Integer.parse(count_str) do
-      {count, ""} when count > 0 ->
-        with {:ok, unit} <- char_to_unit(unit_str),
-             {:ok, type} <- parse_repeater_type(type_str) do
-          {:ok, %{count: count, unit: unit, type: type}}
-        else
-          {:error, reason} -> {:error, reason}
-        end
-
-      _ ->
-        {:error, "Invalid repeater count: #{count_str}"}
-    end
-  end
-
-  defp parse_repeater_type("+"), do: {:ok, :regular}
-  defp parse_repeater_type("++"), do: {:ok, :cumulative}
-  defp parse_repeater_type(".+"), do: {:ok, :catch_up}
-  defp parse_repeater_type(type), do: {:error, "Invalid repeater type: #{type}"}
-
-  defp parse_warning(count_str, unit_str)
-       when is_nil(count_str) or count_str == "" or is_nil(unit_str) or unit_str == "",
-       do: {:ok, nil}
-
-  defp parse_warning(count_str, unit_str)
-       when is_binary(count_str) and is_binary(unit_str) do
-    case Integer.parse(count_str) do
-      {count, ""} when count > 0 ->
-        case char_to_unit(unit_str) do
-          {:ok, unit} -> {:ok, %{count: count, unit: unit}}
-          {:error, reason} -> {:error, reason}
-        end
-
-      _ ->
-        {:error, "Invalid warning count: #{count_str}"}
-    end
-  end
-
-  defp char_to_unit("h"), do: {:ok, :hour}
-  defp char_to_unit("d"), do: {:ok, :day}
-  defp char_to_unit("w"), do: {:ok, :week}
-  defp char_to_unit("m"), do: {:ok, :month}
-  defp char_to_unit("y"), do: {:ok, :year}
-  defp char_to_unit(char), do: {:error, "Unknown time unit: #{char}"}
 
   defp unit_to_char(:hour), do: "h"
   defp unit_to_char(:day), do: "d"

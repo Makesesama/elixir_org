@@ -46,6 +46,20 @@ defmodule Org.FilePropertiesIntegrationTest do
       assert doc.contents == []
     end
 
+    test "normalizes lowercase and mixed-case file property keywords" do
+      content = """
+      #+title: Lowercase Title
+      #+AuThOr: Mixed Case Author
+
+      * Section
+      """
+
+      doc = Org.load_string(content)
+
+      assert doc.file_properties["TITLE"] == "Lowercase Title"
+      assert doc.file_properties["AUTHOR"] == "Mixed Case Author"
+    end
+
     test "handles document without file properties" do
       content = """
       * Section Without Properties

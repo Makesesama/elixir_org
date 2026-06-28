@@ -163,16 +163,24 @@ defmodule Org.FileProperties do
       nil
   """
   @spec parse_file_property_line(String.t()) :: {String.t(), String.t()} | nil
-  def parse_file_property_line(line) do
-    case Regex.run(~r/^#\+([A-Z_][A-Z0-9_]*)\s*:\s*(.*)$/, String.trim(line)) do
-      [_, key, value] ->
-        if key in @excluded_keywords do
-          nil
-        else
-          {String.trim(key), String.trim(value)}
+  def parse_file_property_line(line), do: parse_file_property_line(line, [])
+
+  @doc false
+  @spec parse_file_property_line(String.t(), keyword()) :: {String.t(), String.t()} | nil
+  def parse_file_property_line(line, opts) do
+    allow_lowercase? = Keyword.get(opts, :allow_lowercase, false)
+
+    case Org.Syntax.KeywordParser.parse_line(line) do
+      {:ok, {key, value}} ->
+        normalized_key = String.upcase(key)
+
+        cond do
+          normalized_key in @excluded_keywords -> nil
+          not allow_lowercase? and key != normalized_key -> nil
+          true -> {normalized_key, value}
         end
 
-      nil ->
+      :error ->
         nil
     end
   end
@@ -221,8 +229,7 @@ defmodule Org.FileProperties do
   """
   @spec file_property_line?(String.t()) :: boolean()
   def file_property_line?(line) do
-    trimmed = String.trim(line)
-    String.match?(trimmed, ~r/^#\+[A-Z_][A-Z0-9_]*\s*:/)
+    parse_file_property_line(line) != nil
   end
 
   @doc """

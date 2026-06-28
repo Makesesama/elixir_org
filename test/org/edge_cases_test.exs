@@ -15,6 +15,13 @@ defmodule Org.EdgeCasesTest do
       end
     end
 
+    test "does not parse heading without whitespace after stars" do
+      doc = Org.Parser.parse("*not a heading")
+
+      assert doc.sections == []
+      assert [%Org.Paragraph{lines: ["*not a heading"]}] = doc.contents
+    end
+
     test "sections with only asterisks" do
       source = "*\n**\n***\n****"
 

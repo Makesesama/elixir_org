@@ -44,7 +44,8 @@ defmodule Org.Mixfile do
     [
       {:ex_doc, "~> 0.35", only: :dev, runtime: false},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
-      {:credo, "~> 1.7", only: [:dev, :test], runtime: false}
+      {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
+      {:nimble_parsec, "~> 1.4"}
     ]
   end
 end

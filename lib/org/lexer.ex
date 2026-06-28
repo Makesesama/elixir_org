@@ -52,30 +52,22 @@ defmodule Org.Lexer do
     |> lex_lines(rest)
   end
 
-  @begin_src_re ~r/^#\+BEGIN_SRC(?:\s+([^\s]*)\s?(.*)|)$/
-  @end_src_re ~r/^#\+END_SRC$/
   @comment_re ~r/^#(.+)$/
-  @section_title_re ~r/^(\*+)(?:\s+(?:(TODO|DONE)\s+)?(?:\[#([ABC])\]\s+)?(.*))?$/
   @empty_line_re ~r/^\s*$/
-  @table_row_re ~r/^\s*(?:\|[^|]*)+\|\s*$/
-  @unordered_list_re ~r/^(\s*)[-+]\s+(.+)$/
-  @ordered_list_re ~r/^(\s*)(\d+)[\.)]\s+(.+)$/
-
   defp lex_line(line, %Org.Lexer{mode: :normal} = lexer) do
     cond do
-      match = Regex.run(@begin_src_re, line) -> handle_begin_src(lexer, match)
+      Org.Syntax.BlockParser.begin_src?(line) -> handle_begin_src(lexer, line)
       match = Regex.run(@comment_re, line) -> handle_comment(lexer, match)
-      match = Regex.run(@section_title_re, line) -> parse_section_title_match(lexer, match)
+      String.starts_with?(line, "*") -> handle_potential_section_title(lexer, line)
       Regex.run(@empty_line_re, line) -> append_token(lexer, {:empty_line})
-      Regex.run(@table_row_re, line) -> handle_table_row(lexer, line)
-      match = Regex.run(@unordered_list_re, line) -> handle_unordered_list(lexer, match)
-      match = Regex.run(@ordered_list_re, line) -> handle_ordered_list(lexer, match)
+      Org.Syntax.TableParser.row?(line) -> handle_table_row(lexer, line)
+      match?({:ok, _}, Org.Syntax.ListParser.parse_line(line, allow_star: false)) -> handle_list_item(lexer, line)
       true -> append_token(lexer, {:text, line})
     end
   end
 
   defp lex_line(line, %Org.Lexer{mode: :raw} = lexer) do
-    if Regex.run(@end_src_re, line) do
+    if Org.Syntax.BlockParser.end_src?(line) do
       append_token(lexer, {:end_src}) |> set_mode(:normal)
     else
       append_token(lexer, {:raw_line, line})
@@ -90,14 +82,8 @@ defmodule Org.Lexer do
     %Org.Lexer{lexer | mode: mode}
   end
 
-  defp handle_begin_src(lexer, match) do
-    {lang, details} =
-      case match do
-        [_, lang, details] -> {lang, details}
-        [_] -> {"", ""}
-        _ -> {"", ""}
-      end
-
+  defp handle_begin_src(lexer, line) do
+    {:ok, %{lang: lang, params: details}} = Org.Syntax.BlockParser.parse_line(line)
     append_token(lexer, {:begin_src, lang, details}) |> set_mode(:raw)
   end
 
@@ -107,76 +93,29 @@ defmodule Org.Lexer do
 
   defp handle_table_row(lexer, line) do
     cells =
-      ~r/\|(?<cell>[^|]+)/
-      |> Regex.scan(line, capture: :all_names)
-      |> List.flatten()
-      |> Enum.map(&String.trim/1)
+      case Org.Syntax.TableParser.parse_row(line) do
+        {:ok, cells} -> cells
+        :separator -> []
+      end
 
     append_token(lexer, {:table_row, cells})
   end
 
-  defp handle_unordered_list(lexer, [_, indent_str, content]) do
-    indent = String.length(indent_str)
-    append_token(lexer, {:list_item, indent, false, nil, content})
+  defp handle_list_item(lexer, line) do
+    {:ok, item} = Org.Syntax.ListParser.parse_line(line, allow_star: false)
+    append_token(lexer, {:list_item, item.indent, item.ordered, item.number, item.content})
   end
 
-  defp handle_ordered_list(lexer, [_, indent_str, number_str, content]) do
-    indent = String.length(indent_str)
-    number = String.to_integer(number_str)
-    append_token(lexer, {:list_item, indent, true, number, content})
-  end
+  defp handle_potential_section_title(lexer, line) do
+    case Org.Syntax.HeadlineParser.parse_line(line) do
+      {:ok, headline} ->
+        append_token(
+          lexer,
+          {:section_title, headline.level, headline.title, headline.todo_keyword, headline.priority, headline.tags}
+        )
 
-  defp parse_section_title_match(lexer, match) do
-    case match do
-      # Just asterisks, no content
-      [_, nesting] ->
-        append_token(lexer, {:section_title, String.length(nesting), "", nil, nil, []})
-
-      # Full match with all components
-      [_, nesting, todo_keyword, priority, title] ->
-        title = if title != nil, do: String.trim(title), else: ""
-        todo_keyword = if todo_keyword != nil and todo_keyword != "", do: todo_keyword, else: nil
-        priority = if priority != nil and priority != "", do: priority, else: nil
-
-        # Extract tags from title
-        {clean_title, tags} = parse_title_and_tags(title)
-
-        append_token(lexer, {:section_title, String.length(nesting), clean_title, todo_keyword, priority, tags})
-
-      # Fallback for any other pattern
-      _ ->
-        # Extract at least the nesting level and treat rest as title
-        [_, nesting | rest] = match
-        title = rest |> Enum.filter(& &1) |> Enum.join(" ") |> String.trim()
-        {clean_title, tags} = parse_title_and_tags(title)
-        append_token(lexer, {:section_title, String.length(nesting), clean_title, nil, nil, tags})
+      :error ->
+        append_token(lexer, {:text, line})
     end
-  end
-
-  # Tag parsing functions (borrowed from FragmentParser)
-
-  defp parse_title_and_tags(text) do
-    # Match tags at the end of the line in format :tag1:tag2:
-    # Tags must be at the end, optionally preceded by whitespace, and contain no spaces within tag names
-    case Regex.run(~r/^(.*?)\s*(:[^:\s]+(?::[^:\s]+)*:)\s*$/, String.trim(text)) do
-      [_, title, tags_string] ->
-        tags = parse_tags(tags_string)
-        {String.trim(title), tags}
-
-      nil ->
-        # No tags found, return the whole text as title
-        {String.trim(text), []}
-    end
-  end
-
-  defp parse_tags(tags_string) do
-    # Extract tags from :tag1:tag2: format
-    tags_string
-    |> String.trim()
-    |> String.trim_leading(":")
-    |> String.trim_trailing(":")
-    |> String.split(":")
-    |> Enum.reject(&(&1 == ""))
-    |> Enum.map(&String.trim/1)
   end
 end

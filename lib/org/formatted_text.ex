@@ -129,26 +129,6 @@ defmodule Org.FormattedText do
 
   # Private implementation
 
-  # Regex patterns for different formatting types
-  @formatting_patterns %{
-    bold: ~r/\*([^*]+)\*/,
-    italic: ~r/\/([^\/]+)\//,
-    underline: ~r/_([^_]+)_/,
-    code: ~r/=([^=]+)=/,
-    verbatim: ~r/~([^~]+)~/,
-    strikethrough: ~r/\+([^\+]+)\+/
-  }
-
-  # Link patterns (processed separately due to different structure)
-  @link_patterns %{
-    # [[URL][description]] - link with description
-    described_link: ~r/\[\[([^\[\]]+)\]\[([^\[\]]+)\]\]/,
-    # [[URL]] - simple link
-    simple_link: ~r/\[\[([^\[\]]+)\]\]/,
-    # Bare URLs (http/https)
-    bare_url: ~r/(https?:\/\/[^\s\[\]]+)/
-  }
-
   # Parse spans recursively
   defp parse_spans("", acc), do: acc
 
@@ -177,75 +157,45 @@ defmodule Org.FormattedText do
   end
 
   # Find the next formatting pattern or link in the text
-  defp find_next_format_or_link(text) do
-    format_matches = find_format_matches(text)
-    link_matches = find_link_matches(text)
+  defp find_next_format_or_link(text), do: find_next_format_or_link(text, text, 0)
 
-    # Combine and find the earliest match
-    (format_matches ++ link_matches)
-    |> Enum.min_by(fn {start, _} -> start end, fn -> nil end)
-    |> case do
-      nil -> nil
-      {_start, match_data} -> match_data
+  defp find_next_format_or_link(_original, "", _offset), do: nil
+
+  defp find_next_format_or_link(original, suffix, offset) do
+    case parse_token_prefix(suffix) do
+      {:format, format, content, _raw, after_text} ->
+        {:format, format, content, binary_part(original, 0, offset), after_text}
+
+      {:link, url, description, _raw, after_text} ->
+        {:link, url, description, binary_part(original, 0, offset), after_text}
+
+      :error ->
+        case next_codepoint(suffix) do
+          {char, rest} -> find_next_format_or_link(original, rest, offset + byte_size(char))
+          nil -> nil
+        end
     end
   end
 
-  defp find_format_matches(text) do
-    @formatting_patterns
-    |> Enum.map(fn {format, regex} ->
-      case Regex.run(regex, text, return: :index) do
-        [{start, _}, {content_start, content_length}] ->
-          before = String.slice(text, 0, start)
-          content = String.slice(text, content_start, content_length)
-          # +2 for the delimiters
-          after_pos = start + (content_length + 2)
-          after_text = String.slice(text, after_pos..-1//1)
-          {start, {:format, format, content, before, after_text}}
+  defp parse_token_prefix(text) do
+    case Org.Syntax.LinkParser.parse_prefix(text) do
+      {:ok, %{url: url, description: description, raw: raw}, rest} ->
+        {:link, url, description, raw, rest}
 
-        nil ->
-          nil
-      end
-    end)
-    |> Enum.reject(&is_nil/1)
-  end
+      :error ->
+        case Org.Syntax.InlineMarkupParser.parse_prefix(text) do
+          {:ok, %{format: format, content: content, raw: raw}, rest} ->
+            {:format, format, content, raw, rest}
 
-  defp find_link_matches(text) do
-    @link_patterns
-    |> Enum.map(&process_link_match(&1, text))
-    |> Enum.reject(&is_nil/1)
-  end
-
-  defp process_link_match({link_type, regex}, text) do
-    case {link_type, Regex.run(regex, text, return: :index)} do
-      {_, nil} ->
-        nil
-
-      {:described_link, [{start, total_length}, {url_start, url_length}, {desc_start, desc_length}]} ->
-        before = String.slice(text, 0, start)
-        url = String.slice(text, url_start, url_length)
-        description = String.slice(text, desc_start, desc_length)
-        after_pos = start + total_length
-        after_text = String.slice(text, after_pos..-1//1)
-        {start, {:link, url, description, before, after_text}}
-
-      {:simple_link, [{start, total_length}, {url_start, url_length}]} ->
-        before = String.slice(text, 0, start)
-        url = String.slice(text, url_start, url_length)
-        after_pos = start + total_length
-        after_text = String.slice(text, after_pos..-1//1)
-        {start, {:link, url, nil, before, after_text}}
-
-      {:bare_url, [{start, total_length}, {url_start, url_length}]} ->
-        before = String.slice(text, 0, start)
-        url = String.slice(text, url_start, url_length)
-        after_pos = start + total_length
-        after_text = String.slice(text, after_pos..-1//1)
-        {start, {:link, url, nil, before, after_text}}
-
-      _ ->
-        nil
+          :error ->
+            :error
+        end
     end
   end
+
+  defp next_codepoint(<<char::utf8, rest::binary>>), do: {<<char::utf8>>, rest}
+  defp next_codepoint(<<char, rest::binary>>), do: {<<char>>, rest}
+  defp next_codepoint(""), do: nil
 
   # Convert a span back to org string
   defp span_to_string(%Span{format: format, content: content}) do

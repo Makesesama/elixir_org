@@ -162,11 +162,11 @@ defmodule Org.FragmentParser do
   """
   @spec parse_fragment(String.t(), keyword()) :: fragment()
   def parse_fragment(text, opts \\ []) do
-    type = opts[:type] || detect_fragment_type(text)
+    keyword_config = opts[:keyword_config] || default_keyword_config()
+    type = opts[:type] || detect_fragment_type(text, keyword_config)
     start_pos = opts[:start_position] || {1, 1}
     context = opts[:context] || %{}
     preserve_whitespace = Keyword.get(opts, :preserve_whitespace, true)
-    keyword_config = opts[:keyword_config] || default_keyword_config()
 
     {content, end_pos} = parse_by_type(text, type, start_pos, context, keyword_config)
 
@@ -258,39 +258,50 @@ defmodule Org.FragmentParser do
 
   # Private functions
 
-  defp detect_fragment_type(text) do
+  defp detect_fragment_type(text, keyword_config) do
     trimmed = String.trim(text)
+    first_line = text |> String.split("\n", parts: 2) |> hd() |> String.trim()
 
     cond do
-      String.match?(trimmed, ~r/^\*+\s/) -> :section
+      match?(
+        {:ok, _headline},
+        Org.Syntax.HeadlineParser.parse_line(first_line, keywords: get_all_keywords(keyword_config))
+      ) ->
+        :section
+
       # List
-      String.match?(trimmed, ~r/^(\s*[-+]|\s*\d+\.)/) -> :content
+      Org.Syntax.ListParser.list_item?(first_line, allow_star: false) ->
+        :content
+
       # Table
-      String.match?(trimmed, ~r/^\s*\|/) -> :content
+      String.starts_with?(first_line, "|") ->
+        :content
+
       # Code block
-      String.match?(trimmed, ~r/^#\+BEGIN_/) -> :content
+      Org.Syntax.BlockParser.begin_src?(first_line) ->
+        :content
+
       # Multi-line content
-      String.contains?(text, "\n") -> :content
+      String.contains?(text, "\n") ->
+        :content
+
       # Formatted text
-      String.contains?(trimmed, "*") or String.contains?(trimmed, "/") -> :text
-      true -> :line
+      String.contains?(trimmed, "*") or String.contains?(trimmed, "/") ->
+        :text
+
+      true ->
+        :line
     end
   end
 
   defp parse_by_type(text, :section, start_pos, context, keyword_config) do
-    # Parse section header using regex with dynamic keywords
     lines = String.split(text, "\n", trim: false)
     first_line = hd(lines)
     rest_lines = tl(lines)
-    trimmed = String.trim(first_line)
-    all_keywords = get_all_keywords(keyword_config)
-    keyword_pattern = build_keyword_regex_pattern(all_keywords)
+    keywords = get_all_keywords(keyword_config)
 
-    regex = ~r/^(\*+)\s*(?:(#{keyword_pattern})\s+)?(?:\[#([ABC])\]\s+)?(.*)$/
-
-    case Regex.run(regex, trimmed) do
-      [_, _stars, todo_keyword, priority, title_and_tags] ->
-        {title, tags} = parse_title_and_tags(title_and_tags)
+    case Org.Syntax.HeadlineParser.parse_line(String.trim(first_line), keywords: keywords) do
+      {:ok, headline} ->
         # Parse properties and metadata from following lines
         {properties, metadata, _remaining} =
           if length(rest_lines) > 0 do
@@ -300,10 +311,10 @@ defmodule Org.FragmentParser do
           end
 
         section = %Section{
-          title: normalize_string(title),
-          todo_keyword: normalize_keyword(todo_keyword),
-          priority: normalize_keyword(priority),
-          tags: tags,
+          title: normalize_string(headline.title),
+          todo_keyword: normalize_keyword(headline.todo_keyword),
+          priority: normalize_keyword(headline.priority),
+          tags: headline.tags,
           properties: properties,
           metadata: metadata,
           children: [],
@@ -313,7 +324,7 @@ defmodule Org.FragmentParser do
         end_pos = calculate_end_position(start_pos, text)
         {section, end_pos}
 
-      nil ->
+      :error ->
         # Fallback to line parsing
         parse_by_type(text, :line, start_pos, context, keyword_config)
     end
@@ -323,13 +334,13 @@ defmodule Org.FragmentParser do
     # Try to parse as different content types
     content =
       cond do
-        String.match?(String.trim(text), ~r/^(\s*[-+]|\s*\d+\.)/) ->
+        text |> String.split("\n", parts: 2) |> hd() |> Org.Syntax.ListParser.list_item?(allow_star: false) ->
           parse_list_fragment(text)
 
-        String.match?(String.trim(text), ~r/^\s*\|/) ->
+        text |> String.split("\n", parts: 2) |> hd() |> String.trim() |> String.starts_with?("|") ->
           parse_table_fragment(text)
 
-        String.match?(String.trim(text), ~r/^#\+BEGIN_/) ->
+        text |> String.split("\n", parts: 2) |> hd() |> String.trim() |> Org.Syntax.BlockParser.begin_src?() ->
           parse_code_block_fragment(text)
 
         true ->
@@ -382,35 +393,20 @@ defmodule Org.FragmentParser do
   end
 
   defp parse_list_item_match(line, base_indent) do
-    case Regex.run(~r/^(\s*)([-+]|\d+\.)\s+(.*)/, line) do
-      [_, indent_str, bullet, content] ->
-        create_list_item(indent_str, bullet, content, base_indent)
+    case Org.Syntax.ListParser.parse_line(line, allow_star: false) do
+      {:ok, parsed} ->
+        item = %List.Item{
+          indent: max(parsed.indent - base_indent, 0),
+          ordered: parsed.ordered,
+          number: parsed.number,
+          content: String.trim(parsed.content),
+          children: []
+        }
 
-      nil ->
+        {:ok, item}
+
+      :error ->
         {:skip, nil}
-    end
-  end
-
-  defp create_list_item(indent_str, bullet, content, base_indent) do
-    indent = String.length(indent_str) - base_indent
-    ordered = String.match?(bullet, ~r/\d+\./)
-    number = if ordered, do: parse_item_number(bullet), else: nil
-
-    item = %List.Item{
-      indent: max(indent, 0),
-      ordered: ordered,
-      number: number,
-      content: String.trim(content),
-      children: []
-    }
-
-    {:ok, item}
-  end
-
-  defp parse_item_number(bullet) do
-    case Integer.parse(String.trim_trailing(bullet, ".")) do
-      {num, _} -> num
-      :error -> nil
     end
   end
 
@@ -435,23 +431,10 @@ defmodule Org.FragmentParser do
   end
 
   defp parse_table_row(line) do
-    trimmed = String.trim(line)
-
-    cond do
-      String.match?(trimmed, ~r/^\|[-\s\|]+\|$/) ->
-        %Table.Separator{}
-
-      String.starts_with?(trimmed, "|") and String.ends_with?(trimmed, "|") ->
-        cells =
-          trimmed
-          |> String.slice(1..-2//1)
-          |> String.split("|")
-          |> Enum.map(&String.trim/1)
-
-        %Table.Row{cells: cells}
-
-      true ->
-        nil
+    case Org.Syntax.TableParser.parse_row(line) do
+      {:ok, cells} -> %Table.Row{cells: cells}
+      :separator -> %Table.Separator{}
+      :error -> nil
     end
   end
 
@@ -460,17 +443,21 @@ defmodule Org.FragmentParser do
 
     case lines do
       [begin_line | rest] ->
-        case Regex.run(~r/^#\+BEGIN_SRC\s+(\S+)?\s*(.*)/, begin_line) do
-          [_, lang, details] ->
-            {code_lines, _} = extract_until_end_src(rest)
+        case Org.Syntax.BlockParser.parse_line(begin_line) do
+          {:ok, %{type: :begin_src, lang: lang, params: details}} ->
+            case extract_until_end_src(rest) do
+              {code_lines, true} ->
+                %CodeBlock{
+                  lang: normalize_string(lang),
+                  details: normalize_string(details),
+                  lines: code_lines
+                }
 
-            %CodeBlock{
-              lang: normalize_string(lang),
-              details: normalize_string(details),
-              lines: code_lines
-            }
+              {_code_lines, false} ->
+                %Paragraph{lines: [text]}
+            end
 
-          nil ->
+          _ ->
             %Paragraph{lines: [text]}
         end
 
@@ -480,9 +467,9 @@ defmodule Org.FragmentParser do
   end
 
   defp extract_until_end_src(lines) do
-    case Enum.find_index(lines, &String.match?(&1, ~r/^#\+END_SRC/)) do
-      nil -> {lines, []}
-      index -> Enum.split(lines, index)
+    case Enum.find_index(lines, &Org.Syntax.BlockParser.end_src?/1) do
+      nil -> {lines, false}
+      index -> {elem(Enum.split(lines, index), 0), true}
     end
   end
 
@@ -490,9 +477,14 @@ defmodule Org.FragmentParser do
     indent_level = String.length(text) - String.length(String.trim_leading(text))
 
     section_level =
-      case Regex.run(~r/^(\*+)/, String.trim(text)) do
-        [_, stars] -> String.length(stars)
-        nil -> nil
+      text
+      |> String.split("\n", parts: 2)
+      |> hd()
+      |> String.trim()
+      |> Org.Syntax.HeadlineParser.parse_line()
+      |> case do
+        {:ok, headline} -> headline.level
+        :error -> nil
       end
 
     list_context = detect_list_context(text)
@@ -506,15 +498,15 @@ defmodule Org.FragmentParser do
   end
 
   defp detect_list_context(text) do
-    case Regex.run(~r/^(\s*)([-+]|\d+\.)\s+/, text) do
-      [_, indent_str, bullet] ->
+    case Org.Syntax.ListParser.parse_line(text, allow_star: false) do
+      {:ok, item} ->
         %{
-          type: if(String.match?(bullet, ~r/\d+\./), do: :ordered, else: :unordered),
-          base_indent: String.length(indent_str),
-          item_number: parse_item_number(bullet)
+          type: if(item.ordered, do: :ordered, else: :unordered),
+          base_indent: item.indent,
+          item_number: item.number
         }
 
-      nil ->
+      :error ->
         nil
     end
   end
@@ -624,35 +616,11 @@ defmodule Org.FragmentParser do
     end)
   end
 
+  defp normalize_keyword(nil), do: nil
   defp normalize_keyword(""), do: nil
   defp normalize_keyword(keyword) when is_binary(keyword), do: keyword
 
   defp normalize_string(str) when is_binary(str), do: String.trim(str)
-
-  defp parse_title_and_tags(text) do
-    # Match tags at the end of the line in format :tag1:tag2:
-    # Tags must be at the end, optionally preceded by whitespace, and contain no spaces within tag names
-    case Regex.run(~r/^(.*?)\s*(:[^:\s]+(?::[^:\s]+)*:)\s*$/, String.trim(text)) do
-      [_, title, tags_string] ->
-        tags = parse_tags(tags_string)
-        {String.trim(title), tags}
-
-      nil ->
-        # No tags found, return the whole text as title
-        {String.trim(text), []}
-    end
-  end
-
-  defp parse_tags(tags_string) do
-    # Extract tags from :tag1:tag2: format
-    tags_string
-    |> String.trim()
-    |> String.trim_leading(":")
-    |> String.trim_trailing(":")
-    |> String.split(":")
-    |> Enum.reject(&(&1 == ""))
-    |> Enum.map(&String.trim/1)
-  end
 
   defp render_tags([]), do: ""
 
@@ -667,10 +635,5 @@ defmodule Org.FragmentParser do
     keyword_config.sequences
     |> Enum.flat_map(fn seq -> seq.todo_keywords ++ seq.done_keywords end)
     |> Enum.uniq()
-  end
-
-  defp build_keyword_regex_pattern(keywords) do
-    keywords
-    |> Enum.map_join("|", &Regex.escape/1)
   end
 end

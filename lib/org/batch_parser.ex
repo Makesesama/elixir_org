@@ -625,13 +625,10 @@ defmodule Org.BatchParser do
   defp extract_links_from_content(_), do: []
 
   defp extract_links_from_line(line) when is_binary(line) do
-    # Extract links from plain text line using regex
-    regex = ~r/\[\[([^\]]+)\](?:\[([^\]]+)\])?\]/
-
-    Regex.scan(regex, line)
-    |> Enum.map(fn
-      [_, url] -> %{url: url, description: nil}
-      [_, url, desc] -> %{url: url, description: desc}
+    line
+    |> Org.Syntax.LinkParser.extract_links()
+    |> Enum.map(fn %{url: url, description: description} ->
+      %{url: url, description: description}
     end)
   end
 

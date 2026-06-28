@@ -215,14 +215,14 @@ defmodule Org.Parser do
         end
 
       {:code_block, _, _} ->
-        if String.starts_with?(line, "#+END_SRC") or String.starts_with?(line, "#+end_src") do
+        if Org.Syntax.BlockParser.end_src?(line) do
           handle_code_block_end(parser)
         else
           %{parser | buffer: [line | parser.buffer]}
         end
 
       :table ->
-        if String.starts_with?(line, "|") do
+        if Org.Syntax.TableParser.row?(line, plus_separator: true) do
           %{parser | buffer: [line | parser.buffer]}
         else
           updated_parser = finish_table(parser)
@@ -328,77 +328,30 @@ defmodule Org.Parser do
 
   # Section handling
   defp handle_section_line(line, parser) do
-    # Mark that file property parsing has ended when we see a section
-    parser = %{parser | context: Map.put(parser.context, :file_properties_ended, true)}
+    case Org.Syntax.HeadlineParser.parse_line(line) do
+      {:ok, headline} ->
+        # Mark that file property parsing has ended when we see a section
+        parser = %{parser | context: Map.put(parser.context, :file_properties_ended, true)}
 
-    # Parse section header
-    {level, title, todo, priority, tags} = parse_section_header(line)
+        # Finalize current content
+        parser = flush_buffer(parser)
 
-    # Finalize current content
-    parser = flush_buffer(parser)
+        # Add section directly without tag inheritance for default parsing
+        section = %Org.Section{
+          title: headline.title,
+          todo_keyword: headline.todo_keyword,
+          priority: headline.priority,
+          tags: headline.tags,
+          contents: [],
+          children: []
+        }
 
-    # Add section directly without tag inheritance for default parsing
-    section = %Org.Section{
-      title: title,
-      todo_keyword: todo,
-      priority: priority,
-      tags: tags,
-      contents: [],
-      children: []
-    }
+        doc = add_section_to_document(parser.document, section, headline.level)
+        %{parser | document: doc}
 
-    doc = add_section_to_document(parser.document, section, level)
-    %{parser | document: doc}
-  end
-
-  # Fast section header parsing using binary pattern matching
-  defp parse_section_header(line) do
-    {level, rest} = count_stars(line, 0)
-    {todo, rest} = extract_todo(rest)
-    {priority, rest} = extract_priority(rest)
-    {title, tags} = extract_title_and_tags(rest)
-
-    {level, title, todo, priority, tags}
-  end
-
-  defp count_stars(<<"*", rest::binary>>, count), do: count_stars(rest, count + 1)
-  defp count_stars(<<" ", rest::binary>>, count), do: {count, rest}
-  defp count_stars(rest, count), do: {count, rest}
-
-  defp extract_todo(text) do
-    case String.split(text, " ", parts: 2) do
-      [word, rest] when word in ["TODO", "DONE"] ->
-        {word, rest}
-
-      _ ->
-        {nil, text}
+      :error ->
+        handle_paragraph_line(line, parser)
     end
-  end
-
-  defp extract_priority(<<"[#", priority::8, "]", rest::binary>>)
-       when priority in ?A..?C do
-    # Only A, B, C are valid priorities in org-mode
-    {<<priority>>, String.trim_leading(rest)}
-  end
-
-  defp extract_priority(text), do: {nil, text}
-
-  defp extract_title_and_tags(text) do
-    case Regex.run(~r/^(.*?)\s*(:[^:\s]+(?::[^:\s]+)*:)\s*$/, text) do
-      [_, title, tags_string] ->
-        tags = parse_tags(tags_string)
-        {String.trim(title), tags}
-
-      nil ->
-        {String.trim(text), []}
-    end
-  end
-
-  defp parse_tags(tags_string) do
-    tags_string
-    |> String.trim(":")
-    |> String.split(":")
-    |> Enum.reject(&(&1 == ""))
   end
 
   # Buffer management
@@ -506,11 +459,10 @@ defmodule Org.Parser do
   end
 
   defp parse_property_line(line) do
-    trimmed = String.trim(line)
     # Parse lines like ":KEY: value" or ":KEY:" (no value)
-    case Regex.run(~r/^:([^:]+):\s*(.*)$/, trimmed) do
-      [_, key, value] -> {key, value}
-      _ -> nil
+    case Org.Syntax.PropertyParser.parse_line(line) do
+      {:ok, {key, value}} -> {key, value}
+      :error -> nil
     end
   end
 
@@ -518,7 +470,7 @@ defmodule Org.Parser do
   defp handle_table_line(line, parser) do
     case parser.mode do
       :table ->
-        if String.starts_with?(line, "|") do
+        if Org.Syntax.TableParser.row?(line, plus_separator: true) do
           %{parser | buffer: [line | parser.buffer]}
         else
           # Table ended, flush and process new line
@@ -549,18 +501,10 @@ defmodule Org.Parser do
   end
 
   defp parse_table_row(line) do
-    if String.contains?(line, "+-") or String.contains?(line, "-+") do
-      %Org.Table.Separator{}
-    else
-      cells =
-        line
-        |> String.trim()
-        |> String.trim_leading("|")
-        |> String.trim_trailing("|")
-        |> String.split("|")
-        |> Enum.map(&String.trim/1)
-
-      %Org.Table.Row{cells: cells}
+    case Org.Syntax.TableParser.parse_row(line, plus_separator: true) do
+      {:ok, cells} -> %Org.Table.Row{cells: cells}
+      :separator -> %Org.Table.Separator{}
+      :error -> %Org.Table.Row{cells: []}
     end
   end
 
@@ -605,17 +549,9 @@ defmodule Org.Parser do
   end
 
   defp parse_list_item(line) do
-    cond do
-      match = Regex.run(~r/^(\s*)[-+*]\s+(.*)$/, line) ->
-        [_, indent_str, content] = match
-        %{indent: String.length(indent_str), ordered: false, content: content, number: nil}
-
-      match = Regex.run(~r/^(\s*)(\d+)[\.)]\s+(.*)$/, line) ->
-        [_, indent_str, number_str, content] = match
-        %{indent: String.length(indent_str), ordered: true, content: content, number: String.to_integer(number_str)}
-
-      true ->
-        nil
+    case Org.Syntax.ListParser.parse_line(line) do
+      {:ok, item} -> Map.take(item, [:indent, :ordered, :content, :number])
+      :error -> nil
     end
   end
 
@@ -663,8 +599,8 @@ defmodule Org.Parser do
   defp handle_code_block_end(parser), do: parser
 
   defp parse_code_block_header(line) do
-    case Regex.run(~r/^#\+BEGIN_SRC\s+(\S+)(.*)/i, line) do
-      [_, lang, params] -> {lang, String.trim(params)}
+    case Org.Syntax.BlockParser.parse_line(line) do
+      {:ok, %{type: :begin_src, lang: lang, params: params}} -> {lang, params}
       _ -> {"", ""}
     end
   end
@@ -692,23 +628,12 @@ defmodule Org.Parser do
   end
 
   defp handle_plugin_block(line, parser, plugin) do
-    # Extract the block type from the line
-    cond do
-      # Handle #+BEGIN: style (dynamic blocks)
-      match = Regex.run(~r/^#\+BEGIN:\s*(\w+)/i, line) ->
-        [_, _block_type] = match
-        end_marker = "#+END:"
+    case Org.Syntax.BlockParser.parse_line(line) do
+      {:ok, %{type: type, end_marker: end_marker}} when type in [:begin_dynamic, :begin_block] ->
         parser = flush_buffer(parser)
         collect_block_content(parser, [line], end_marker, plugin)
 
-      # Handle #+BEGIN_BLOCKTYPE style (static blocks)
-      match = Regex.run(~r/^#\+BEGIN_(\w+)/i, line) ->
-        [_, block_type] = match
-        end_marker = "#+END_" <> String.upcase(block_type)
-        parser = flush_buffer(parser)
-        collect_block_content(parser, [line], end_marker, plugin)
-
-      true ->
+      _ ->
         # Not a proper block start, treat as paragraph
         handle_paragraph_line(line, parser)
     end
@@ -721,41 +646,20 @@ defmodule Org.Parser do
 
   # Metadata handling (SCHEDULED, DEADLINE, CLOSED)
   defp handle_metadata_line(line, parser) do
-    trimmed = String.trim_leading(line)
+    case Org.Syntax.PlanningParser.parse_line(line) do
+      {:ok, metadata} ->
+        add_metadata_to_current_section(parser, metadata)
 
-    cond do
-      String.starts_with?(trimmed, "SCHEDULED:") ->
-        value = extract_metadata_value(trimmed, "SCHEDULED:")
-        add_metadata_to_current_section(parser, :scheduled, value)
-
-      String.starts_with?(trimmed, "DEADLINE:") ->
-        value = extract_metadata_value(trimmed, "DEADLINE:")
-        add_metadata_to_current_section(parser, :deadline, value)
-
-      String.starts_with?(trimmed, "CLOSED:") ->
-        value = extract_metadata_value(trimmed, "CLOSED:")
-        add_metadata_to_current_section(parser, :closed, value)
-
-      true ->
+      :error ->
         # Fallback to paragraph handling
         handle_paragraph_line(line, parser)
     end
   end
 
-  defp extract_metadata_value(line, prefix) do
-    timestamp_str =
-      line
-      |> String.trim_leading(prefix)
-      |> String.trim()
-
-    case Org.Timestamp.parse(timestamp_str) do
-      {:ok, timestamp} ->
-        timestamp
-
-      {:error, _reason} ->
-        # If parsing fails, fall back to string (for backward compatibility)
-        timestamp_str
-    end
+  defp add_metadata_to_current_section(parser, metadata) when is_map(metadata) do
+    Enum.reduce(metadata, parser, fn {key, value}, acc ->
+      add_metadata_to_current_section(acc, key, value)
+    end)
   end
 
   defp add_metadata_to_current_section(parser, key, value) do
@@ -827,10 +731,7 @@ defmodule Org.Parser do
   end
 
   defp parse_file_property(line) do
-    case Regex.run(~r/^#\+(\w+):\s*(.*)/, line) do
-      [_, key, value] -> {String.upcase(key), String.trim(value)}
-      _ -> nil
-    end
+    Org.FileProperties.parse_file_property_line(line, allow_lowercase: true)
   end
 
   # Paragraph handling

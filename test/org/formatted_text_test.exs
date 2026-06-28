@@ -397,6 +397,34 @@ defmodule Org.FormattedTextTest do
 
       assert result == expected
     end
+
+    test "does not parse markup delimiters inside link descriptions" do
+      result = FormattedText.parse("Read [[https://example.com][*Important* docs]] now")
+
+      expected = %FormattedText{
+        spans: [
+          "Read ",
+          %FormattedText.Link{url: "https://example.com", description: "*Important* docs"},
+          " now"
+        ]
+      }
+
+      assert result == expected
+    end
+
+    test "does not parse slashes in bare URLs as italic markup" do
+      result = FormattedText.parse("Visit https://example.com/path/to/docs now")
+
+      expected = %FormattedText{
+        spans: [
+          "Visit ",
+          %FormattedText.Link{url: "https://example.com/path/to/docs", description: nil},
+          " now"
+        ]
+      }
+
+      assert result == expected
+    end
   end
 
   describe "Link conversion" do

@@ -95,12 +95,9 @@ defmodule Org.PropertyDrawer do
   """
   @spec parse_property_line(String.t()) :: {String.t(), String.t()} | nil
   def parse_property_line(line) do
-    case Regex.run(~r/^\s*:([^:]+):\s*(.*)$/, String.trim(line)) do
-      [_, key, value] ->
-        {String.trim(key), String.trim(value)}
-
-      nil ->
-        nil
+    case Org.Syntax.PropertyParser.parse_line(line) do
+      {:ok, {key, value}} -> {key, value}
+      :error -> nil
     end
   end
 
@@ -126,22 +123,11 @@ defmodule Org.PropertyDrawer do
   end
 
   defp parse_metadata_lines([line | rest], metadata) do
-    trimmed = String.trim(line)
+    case Org.Syntax.PlanningParser.parse_line(line) do
+      {:ok, parsed_metadata} ->
+        parse_metadata_lines(rest, Map.merge(metadata, parsed_metadata))
 
-    cond do
-      String.starts_with?(trimmed, "SCHEDULED:") ->
-        value = extract_metadata_value(trimmed, "SCHEDULED:")
-        parse_metadata_lines(rest, Map.put(metadata, :scheduled, value))
-
-      String.starts_with?(trimmed, "DEADLINE:") ->
-        value = extract_metadata_value(trimmed, "DEADLINE:")
-        parse_metadata_lines(rest, Map.put(metadata, :deadline, value))
-
-      String.starts_with?(trimmed, "CLOSED:") ->
-        value = extract_metadata_value(trimmed, "CLOSED:")
-        parse_metadata_lines(rest, Map.put(metadata, :closed, value))
-
-      true ->
+      :error ->
         # Not a metadata line, return what we have
         {metadata, [line | rest]}
     end
@@ -149,22 +135,6 @@ defmodule Org.PropertyDrawer do
 
   defp parse_metadata_lines([], metadata) do
     {metadata, []}
-  end
-
-  defp extract_metadata_value(line, prefix) do
-    timestamp_str =
-      line
-      |> String.trim_leading(prefix)
-      |> String.trim()
-
-    case Org.Timestamp.parse(timestamp_str) do
-      {:ok, timestamp} ->
-        timestamp
-
-      {:error, _reason} ->
-        # If parsing fails, fall back to string (for backward compatibility)
-        timestamp_str
-    end
   end
 
   @doc """
@@ -239,11 +209,7 @@ defmodule Org.PropertyDrawer do
   """
   @spec metadata_line?(String.t()) :: boolean()
   def metadata_line?(line) do
-    trimmed = String.trim(line)
-
-    String.starts_with?(trimmed, "SCHEDULED:") or
-      String.starts_with?(trimmed, "DEADLINE:") or
-      String.starts_with?(trimmed, "CLOSED:")
+    match?({:ok, _metadata}, Org.Syntax.PlanningParser.parse_line(line))
   end
 
   @doc """

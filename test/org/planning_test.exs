@@ -72,6 +72,20 @@ defmodule Org.PlanningTest do
   end
 
   describe "planning metadata extraction" do
+    test "can parse multiple planning keywords on one line" do
+      doc =
+        Org.load_string("""
+        * TODO Task
+          SCHEDULED: <2024-01-15 Mon> DEADLINE: <2024-01-20 Sat> CLOSED: [2024-01-18 Thu]
+        """)
+
+      task = Org.section(doc, ["Task"])
+      assert task.metadata[:scheduled].date == ~D[2024-01-15]
+      assert task.metadata[:deadline].date == ~D[2024-01-20]
+      assert task.metadata[:closed].date == ~D[2024-01-18]
+      assert task.metadata[:closed].type == :inactive
+    end
+
     test "can find scheduled items" do
       doc =
         Org.load_string("""

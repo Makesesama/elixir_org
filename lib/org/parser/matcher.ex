@@ -80,52 +80,43 @@ defmodule Org.Parser.Matcher do
   Returns the structure type for routing to appropriate handler.
   """
   @spec identify_content_type(binary()) :: atom()
-  def identify_content_type(<<"#+BEGIN_SRC", _::binary>>), do: :code_block
-  def identify_content_type(<<"#+begin_src", _::binary>>), do: :code_block
-  def identify_content_type(<<"#+END_SRC", _::binary>>), do: :code_block_end
-  def identify_content_type(<<"#+end_src", _::binary>>), do: :code_block_end
-  def identify_content_type(<<"#+BEGIN:", _::binary>>), do: :dynamic_block
-  def identify_content_type(<<"#+END:", _::binary>>), do: :dynamic_block_end
-  def identify_content_type(<<"#+BEGIN_", _::binary>>), do: :block
-  def identify_content_type(<<"#+END_", _::binary>>), do: :block_end
-  def identify_content_type(<<"#", _::binary>>), do: :comment
-  def identify_content_type(<<"*", _::binary>>), do: :section
-  def identify_content_type(<<"|", _::binary>>), do: :table
-  def identify_content_type(<<digit, ". ", _::binary>>) when digit in ?0..?9, do: :list
-  def identify_content_type(<<digit, ") ", _::binary>>) when digit in ?0..?9, do: :list
-  def identify_content_type(<<"[[", _::binary>>), do: :link
-  def identify_content_type(<<":PROPERTIES:", _::binary>>), do: :property_drawer
-  def identify_content_type(<<":END:", _::binary>>), do: :drawer_end
-
   def identify_content_type(content) when is_binary(content) do
-    trimmed = String.trim_leading(content)
-    identify_trimmed_content_type(trimmed)
+    content
+    |> String.trim_leading()
+    |> identify_trimmed_content_type()
   end
 
   defp identify_trimmed_content_type(trimmed) do
+    block_type = block_content_type(trimmed)
+
     cond do
+      block_type != nil -> block_type
       property_drawer?(trimmed) -> :property_drawer
       drawer_end?(trimmed) -> :drawer_end
-      metadata?(trimmed) -> :metadata
-      indented_list?(trimmed) -> :list
+      Org.Syntax.PlanningParser.parse_line(trimmed) != :error -> :metadata
+      match?({:ok, _}, Org.Syntax.HeadlineParser.parse_line(trimmed)) -> :section
+      Org.Syntax.TableParser.row?(trimmed, plus_separator: true) -> :table
+      Org.Syntax.ListParser.list_item?(trimmed) -> :list
+      match?({:ok, _link, _rest}, Org.Syntax.LinkParser.parse_prefix(trimmed)) -> :link
+      String.starts_with?(trimmed, "#") -> :comment
       true -> :paragraph
+    end
+  end
+
+  defp block_content_type(trimmed) do
+    case Org.Syntax.BlockParser.parse_line(trimmed) do
+      {:ok, %{type: :begin_src}} -> :code_block
+      {:ok, %{type: :end_src}} -> :code_block_end
+      {:ok, %{type: :begin_dynamic}} -> :dynamic_block
+      {:ok, %{type: :end_dynamic}} -> :dynamic_block_end
+      {:ok, %{type: :begin_block}} -> :block
+      {:ok, %{type: :end_block}} -> :block_end
+      _ -> nil
     end
   end
 
   defp property_drawer?(trimmed), do: String.starts_with?(trimmed, ":PROPERTIES:")
   defp drawer_end?(trimmed), do: String.starts_with?(trimmed, ":END:")
-
-  defp metadata?(trimmed) do
-    String.starts_with?(trimmed, "SCHEDULED:") or
-      String.starts_with?(trimmed, "DEADLINE:") or
-      String.starts_with?(trimmed, "CLOSED:")
-  end
-
-  defp indented_list?(trimmed) do
-    Regex.match?(~r/^[-+]\s+/, trimmed) or
-      Regex.match?(~r/^\*\s+/, trimmed) or
-      Regex.match?(~r/^\d+[.)]\s+/, trimmed)
-  end
 
   @doc """
   Fast extraction of block content between BEGIN and END markers.

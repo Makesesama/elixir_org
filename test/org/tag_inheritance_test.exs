@@ -27,6 +27,14 @@ defmodule Org.TagInheritanceTest do
              ]
     end
 
+    test "does not parse heading without whitespace after stars" do
+      tokens = Org.Lexer.lex("*not a heading")
+
+      assert tokens == [
+               {:text, "*not a heading"}
+             ]
+    end
+
     test "parses section without tags" do
       tokens = Org.Lexer.lex("* Regular section")
 
