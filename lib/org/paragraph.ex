@@ -12,7 +12,7 @@ defmodule Org.Paragraph do
   Example:
       iex> doc = Org.Parser.parse("Foo\nBar\n\nBaz")
       iex> doc.contents
-      [%Org.Paragraph{lines: ["Foo", "Bar"]}, %Org.Paragraph{lines: ["Baz"]}]
+      [%Org.Paragraph{lines: ["Foo", "Bar"]}, %Org.Blank{count: 1}, %Org.Paragraph{lines: ["Baz"]}]
   """
 
   @doc "Constructs a new paragraph from given list of lines"

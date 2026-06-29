@@ -14,7 +14,7 @@ defmodule Org.JSONEncoder do
       type: "document",
       comments: doc.comments,
       sections: Enum.map(doc.sections, &encode/1),
-      contents: Enum.map(doc.contents, &encode/1),
+      contents: doc.contents |> reject_blanks() |> Enum.map(&encode/1),
       file_properties: doc.file_properties
     }
   end
@@ -29,7 +29,7 @@ defmodule Org.JSONEncoder do
       properties: section.properties || %{},
       metadata: encode_metadata(section.metadata || %{}),
       children: Enum.map(section.children, &encode/1),
-      contents: Enum.map(section.contents, &encode/1)
+      contents: section.contents |> reject_blanks() |> Enum.map(&encode/1)
     }
   end
 
@@ -110,12 +110,19 @@ defmodule Org.JSONEncoder do
     }
   end
 
+  # Blank-line nodes are presentation-only and excluded from JSON output, but
+  # provide an explicit encoding for completeness.
+  def encode(%Org.Blank{count: count}), do: %{type: "blank", count: count}
+
   # Handle any other types that might appear (fallback)
   def encode(value) when is_binary(value), do: value
   def encode(value) when is_nil(value), do: nil
   def encode(value) when is_number(value), do: value
   def encode(value) when is_boolean(value), do: value
   def encode(value) when is_atom(value), do: to_string(value)
+
+  # Blank-line nodes carry no semantic content; drop them from JSON output.
+  defp reject_blanks(contents), do: Enum.reject(contents, &match?(%Org.Blank{}, &1))
 
   # Private helper to encode a line (which can be string or FormattedText)
   defp encode_line(%Org.FormattedText{} = formatted), do: encode(formatted)

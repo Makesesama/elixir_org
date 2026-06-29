@@ -18,7 +18,10 @@ defimpl Org.JSONEncodable, for: Org.Document do
       type: "document",
       comments: doc.comments,
       sections: Enum.map(doc.sections, &Org.JSONEncodable.to_json_map/1),
-      contents: Enum.map(doc.contents, &Org.JSONEncodable.to_json_map/1),
+      contents:
+        doc.contents
+        |> Enum.reject(&match?(%Org.Blank{}, &1))
+        |> Enum.map(&Org.JSONEncodable.to_json_map/1),
       file_properties: doc.file_properties
     }
   end
@@ -32,9 +35,16 @@ defimpl Org.JSONEncodable, for: Org.Section do
       todo_keyword: section.todo_keyword,
       priority: section.priority,
       children: Enum.map(section.children, &Org.JSONEncodable.to_json_map/1),
-      contents: Enum.map(section.contents, &Org.JSONEncodable.to_json_map/1)
+      contents:
+        section.contents
+        |> Enum.reject(&match?(%Org.Blank{}, &1))
+        |> Enum.map(&Org.JSONEncodable.to_json_map/1)
     }
   end
+end
+
+defimpl Org.JSONEncodable, for: Org.Blank do
+  def to_json_map(%Org.Blank{count: count}), do: %{type: "blank", count: count}
 end
 
 defimpl Org.JSONEncodable, for: Org.Paragraph do

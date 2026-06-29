@@ -53,7 +53,7 @@ defmodule Org.TagInheritanceTest do
   end
 
   describe "tag inheritance" do
-    test "serialization shows inherited vs direct tags" do
+    test "serialization writes only direct tags (inherited tags are not re-emitted)" do
       content = """
       #+FILETAGS: global
 
@@ -64,11 +64,13 @@ defmodule Org.TagInheritanceTest do
       doc = Org.Parser.parse(content, mode: :flexible)
       serialized = Org.to_org_string(doc)
 
-      # Parent should show (global) for inherited file tag, work for direct
-      assert String.contains?(serialized, "* Parent :(global):work:")
-
-      # Child should show (global) (work) for inherited tags, urgent for direct
-      assert String.contains?(serialized, "** Child :(global):(work):urgent:")
+      # Canonical serialization writes only each heading's own (direct) tags.
+      # Inherited tags are recomputed on parse and must NOT be written onto
+      # children, and the legacy invalid `:(tag):` form must never appear.
+      assert String.contains?(serialized, "* Parent :work:")
+      assert String.contains?(serialized, "** Child :urgent:")
+      refute String.contains?(serialized, "(global)")
+      refute String.contains?(serialized, "(work)")
     end
 
     test "section helper functions return correct tag types" do
@@ -329,7 +331,7 @@ defmodule Org.TagInheritanceTest do
       assert Enum.sort(subtask.tags) == Enum.sort(["sprint", "feature", "completed", "active"])
     end
 
-    test "serialization includes all effective tags" do
+    test "serialization writes direct tags only and inheritance is recomputed on reparse" do
       original_text = """
       #+FILETAGS: global
       * Parent :work:
@@ -339,11 +341,15 @@ defmodule Org.TagInheritanceTest do
       doc = Org.load_string(original_text)
       serialized = Org.to_org_string(doc)
 
-      # Serialized version should show inherited tags in parentheses and direct tags normally
-      assert String.contains?(serialized, "* Parent :(global):work:")
-      assert String.contains?(serialized, "** Child :(global):(work):urgent:")
+      # Canonical output writes only direct tags; inherited tags (and the legacy
+      # invalid `:(tag):` form) are never re-emitted onto headings.
+      assert String.contains?(serialized, "* Parent :work:")
+      assert String.contains?(serialized, "** Child :urgent:")
+      refute String.contains?(serialized, "(global)")
+      refute String.contains?(serialized, "(work)")
 
-      # When reparsed, should maintain the same effective tags
+      # When reparsed, the full effective tag set is recomputed via inheritance
+      # (FILETAGS + ancestor tags), so no information is lost.
       reparsed = Org.Parser.parse(serialized, mode: :flexible)
       parent = Org.section(reparsed, ["Parent"])
       child = Org.section(reparsed, ["Parent", "Child"])

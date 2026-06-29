@@ -317,7 +317,9 @@ defmodule Org.Parser do
 
   defp handle_content_by_type(:paragraph, line, parser) do
     if String.trim(line) == "" do
-      flush_buffer(parser)
+      parser
+      |> flush_buffer()
+      |> add_blank_line()
     else
       handle_paragraph_line(line, parser)
     end
@@ -325,6 +327,76 @@ defmodule Org.Parser do
 
   defp handle_content_by_type(_, line, parser),
     do: %{parser | buffer: [line | parser.buffer]}
+
+  # Record a blank line as an `%Org.Blank{}` content node so the writer can
+  # reproduce exact vertical spacing on round-trip. Consecutive blank lines are
+  # coalesced into a single node with an incremented count.
+  defp add_blank_line(parser) do
+    case current_deepest_content(parser) do
+      %Org.Blank{count: n} ->
+        replace_deepest_blank(parser, %Org.Blank{count: n + 1})
+
+      _ ->
+        add_content(parser, %Org.Blank{count: 1})
+    end
+  end
+
+  defp current_deepest_content(%{content_stack: [%{contents: [content | _]} | _]}), do: content
+  defp current_deepest_content(%{content_stack: [_ | _]}), do: nil
+
+  defp current_deepest_content(%{document: %{sections: []} = doc}) do
+    case doc.contents do
+      [content | _] -> content
+      [] -> nil
+    end
+  end
+
+  defp current_deepest_content(%{document: %{sections: sections}}) do
+    deepest_section_first_content(sections)
+  end
+
+  defp deepest_section_first_content([section | _]) do
+    case section.children do
+      [] ->
+        case section.contents do
+          [content | _] -> content
+          [] -> nil
+        end
+
+      children ->
+        deepest_section_first_content(children)
+    end
+  end
+
+  defp deepest_section_first_content([]), do: nil
+
+  defp replace_deepest_blank(parser, blank) do
+    case parser.document.sections do
+      [] ->
+        [_old | rest] = parser.document.contents
+        doc = %{parser.document | contents: [blank | rest]}
+        %{parser | document: doc}
+
+      sections ->
+        {updated_sections, _} = replace_deepest_section_blank(sections, blank)
+        doc = %{parser.document | sections: updated_sections}
+        %{parser | document: doc}
+    end
+  end
+
+  defp replace_deepest_section_blank([section | rest], blank) do
+    case section.children do
+      [] ->
+        [_old | contents_rest] = section.contents
+        updated_section = %{section | contents: [blank | contents_rest]}
+        {[updated_section | rest], :replaced}
+
+      children ->
+        {updated_children, _} = replace_deepest_section_blank(children, blank)
+        updated_section = %{section | children: updated_children}
+        {[updated_section | rest], :replaced}
+    end
+  end
 
   # Section handling
   defp handle_section_line(line, parser) do
@@ -988,7 +1060,23 @@ defmodule Org.Parser do
 
   # Helper functions
   defp split_into_lines(text) do
-    String.split(text, ~r/\r?\n/)
+    text
+    |> String.split(~r/\r?\n/)
+    |> drop_terminating_newline()
+  end
+
+  # A trailing newline at end-of-file is the line terminator, not a blank line:
+  # `"a\n"` splits to `["a", ""]`. Drop that single terminating empty element so
+  # the parser does not record a spurious blank line. The writer re-adds the
+  # canonical trailing newline. A genuine trailing blank line (`"a\n\n"` ->
+  # `["a", "", ""]`) still leaves one `""`, preserving the blank.
+  defp drop_terminating_newline([]), do: []
+
+  defp drop_terminating_newline(lines) do
+    case List.last(lines) do
+      "" -> List.delete_at(lines, -1)
+      _ -> lines
+    end
   end
 
   defp build_context(opts) do

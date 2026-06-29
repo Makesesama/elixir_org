@@ -235,11 +235,14 @@ defmodule Org.Writer do
   @doc """
   Serializes an Org document back to org-mode text format.
 
+  Org files canonically end in a trailing newline, so the serialized output
+  always ends in `\n`.
+
   ## Examples
 
       iex> doc = %Org.Document{sections: [%Org.Section{title: "Test"}]}
-      iex> Org.Writer.to_org_string(doc)
-      "* Test"
+      iex> Org.Writer.to_org_string(doc) == "* Test" <> <<10>>
+      true
   """
   def to_org_string(%Org.Document{} = doc) do
     lines = []
@@ -259,7 +262,17 @@ defmodule Org.Writer do
     # Add sections
     lines = lines ++ sections_to_lines(doc.sections, 1)
 
-    Enum.join(lines, "\n")
+    serialize_lines(lines)
+  end
+
+  # Join rendered lines with newlines. Org files canonically end in a trailing
+  # newline, so emit one for any non-empty document. A document whose final
+  # rendered line is already "" (an explicit blank node) must not gain a second
+  # trailing newline.
+  defp serialize_lines([]), do: ""
+
+  defp serialize_lines(lines) do
+    Enum.join(lines, "\n") <> "\n"
   end
 
   defp sections_to_lines(sections, level) do
@@ -293,25 +306,14 @@ defmodule Org.Writer do
     lines
   end
 
-  # Handle Section structs with inherited_tags field
-  defp render_section_tags_from_struct(%Org.Section{tags: [], inherited_tags: []}), do: ""
-
-  defp render_section_tags_from_struct(%Org.Section{tags: tags, inherited_tags: inherited_tags}) do
-    # Get direct tags (tags that are not inherited)
-    direct_tags = tags -- inherited_tags
-
-    # Build tag representation showing inheritance
-    inherited_part = if inherited_tags != [], do: Enum.map(inherited_tags, &"(#{&1})"), else: []
-    direct_part = direct_tags
-
-    # Combine inherited (in parentheses) and direct tags
-    all_tag_parts = inherited_part ++ direct_part
-
-    if all_tag_parts == [] do
-      ""
-    else
-      tags_string = all_tag_parts |> Enum.join(":")
-      " :#{tags_string}:"
+  # Only direct tags are serialized onto a heading line. Inherited tags must NOT
+  # be written onto children: org recomputes inheritance on parse, and emitting
+  # them (previously as `:(tag):`) produced invalid org and corrupted files on
+  # round-trip. See test/org/round_trip_test.exs.
+  defp render_section_tags_from_struct(%Org.Section{} = section) do
+    case Org.Section.direct_tags(section) do
+      [] -> ""
+      tags -> " :" <> Enum.join(tags, ":") <> ":"
     end
   end
 
@@ -319,37 +321,35 @@ defmodule Org.Writer do
     Enum.flat_map(contents, &content_to_lines/1)
   end
 
-  defp content_to_lines(%Org.Paragraph{lines: lines}) do
-    formatted_lines =
-      Enum.map(lines, fn
-        %Org.FormattedText{} = formatted -> Org.FormattedText.to_org_string(formatted)
-        line when is_binary(line) -> line
-      end)
+  # Blank-line nodes carry the exact vertical spacing captured at parse time.
+  defp content_to_lines(%Org.Blank{count: count}) do
+    List.duplicate("", count)
+  end
 
-    # Add blank line after paragraph
-    formatted_lines ++ [""]
+  defp content_to_lines(%Org.Paragraph{lines: lines}) do
+    Enum.map(lines, fn
+      %Org.FormattedText{} = formatted -> Org.FormattedText.to_org_string(formatted)
+      line when is_binary(line) -> line
+    end)
   end
 
   defp content_to_lines(%Org.CodeBlock{lang: lang, details: details, lines: lines}) do
     begin_line = "#+BEGIN_SRC #{lang} #{details}" |> String.trim()
-    ["#{begin_line}"] ++ lines ++ ["#+END_SRC", ""]
+    ["#{begin_line}"] ++ lines ++ ["#+END_SRC"]
   end
 
   defp content_to_lines(%Org.Table{rows: rows}) do
-    table_lines =
-      Enum.map(rows, fn
-        %Org.Table.Row{cells: cells} ->
-          "| " <> Enum.join(cells, " | ") <> " |"
+    Enum.map(rows, fn
+      %Org.Table.Row{cells: cells} ->
+        "| " <> Enum.join(cells, " | ") <> " |"
 
-        %Org.Table.Separator{} ->
-          "|" <> String.duplicate("-", 10) <> "|"
-      end)
-
-    table_lines ++ [""]
+      %Org.Table.Separator{} ->
+        "|" <> String.duplicate("-", 10) <> "|"
+    end)
   end
 
   defp content_to_lines(%Org.List{items: items}) do
-    list_to_lines(items, 0) ++ [""]
+    list_to_lines(items, 0)
   end
 
   defp content_to_lines(_), do: []
