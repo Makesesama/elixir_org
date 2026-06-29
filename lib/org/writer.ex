@@ -120,6 +120,21 @@ defmodule Org.Writer do
   Updates a node at the specified path using the given function.
 
   The function receives the current node and should return the updated node.
+
+  Path segments may be:
+  - a bare title (`"Task"`) — targets the **first** sibling with that title.
+  - an occurrence tuple (`{"Task", 1}`) — targets the second (0-based) sibling
+    titled "Task", so individual duplicate-title headings are addressable.
+
+  Only the single resolved node is updated. If no sibling matches, the document
+  is returned unchanged.
+
+  ## Examples (duplicate titles)
+
+      iex> doc = Org.Parser.parse("* TODO Buy milk\\n* TODO Buy milk")
+      iex> doc = Org.Writer.update_node(doc, [{"Buy milk", 1}], &%{&1 | todo_keyword: "DONE"})
+      iex> Org.Writer.to_org_string(doc)
+      "* TODO Buy milk\\n* DONE Buy milk\\n"
   """
   def update_node(%Org.Document{} = doc, [], updater) when is_function(updater, 1) do
     updater.(doc)
@@ -130,21 +145,35 @@ defmodule Org.Writer do
   end
 
   defp update_node_recursive(%Org.Document{sections: sections} = doc, [first | rest], updater) do
-    updated_sections =
-      Enum.map(sections, &update_matching_section(&1, first, rest, updater))
-
-    %{doc | sections: updated_sections}
+    %{doc | sections: update_matching_child(sections, first, rest, updater)}
   end
 
   defp update_node_recursive(%Org.Section{children: children} = section, [first | rest], updater) do
-    updated_children =
-      Enum.map(children, &update_matching_section(&1, first, rest, updater))
+    %{section | children: update_matching_child(children, first, rest, updater)}
+  end
 
-    %{section | children: updated_children}
+  # Resolve `segment` to a single sibling and update only that one.
+  defp update_matching_child(siblings, segment, rest, updater) do
+    case Org.PathSegment.resolve_index(siblings, segment) do
+      nil ->
+        siblings
+
+      index ->
+        List.update_at(siblings, index, fn section ->
+          if rest == [] do
+            updater.(section)
+          else
+            update_node_recursive(section, rest, updater)
+          end
+        end)
+    end
   end
 
   @doc """
   Removes a node at the specified path.
+
+  A bare title removes only the **first** matching sibling; an occurrence tuple
+  (`{"Child", 1}`) removes only that specific duplicate.
 
   ## Examples
 
@@ -153,24 +182,36 @@ defmodule Org.Writer do
       iex> Org.NodeFinder.find_by_path(doc, ["Parent", "Child"])
       nil
   """
-  def remove_node(%Org.Document{} = doc, [title]) do
-    %{doc | sections: Enum.reject(doc.sections, fn s -> s.title == title end)}
+  def remove_node(%Org.Document{} = doc, [segment]) do
+    %{doc | sections: reject_matching_child(doc.sections, segment)}
   end
 
   def remove_node(%Org.Document{} = doc, path) do
-    {parent_path, [node_title]} = Enum.split(path, -1)
+    {parent_path, [segment]} = Enum.split(path, -1)
 
     update_node(doc, parent_path, fn
       %Org.Section{} = section ->
-        %{section | children: Enum.reject(section.children, fn c -> c.title == node_title end)}
+        %{section | children: reject_matching_child(section.children, segment)}
 
       _ ->
         raise ArgumentError, "Invalid path for removal"
     end)
   end
 
+  # Remove only the single sibling resolved by `segment` (first match for a bare
+  # title, the indexed occurrence for a `{title, index}` tuple).
+  defp reject_matching_child(siblings, segment) do
+    case Org.PathSegment.resolve_index(siblings, segment) do
+      nil -> siblings
+      index -> List.delete_at(siblings, index)
+    end
+  end
+
   @doc """
   Moves a node from one location to another.
+
+  `from_path` and `to_path` accept occurrence tuples (`{"Task", 1}`) just like
+  the other addressing functions, so a specific duplicate can be moved.
 
   ## Examples
 
@@ -380,18 +421,6 @@ defmodule Org.Writer do
   end
 
   # Helper functions to reduce nesting depth
-
-  defp update_matching_section(section, target_title, rest, updater) do
-    if section.title == target_title do
-      if rest == [] do
-        updater.(section)
-      else
-        update_node_recursive(section, rest, updater)
-      end
-    else
-      section
-    end
-  end
 
   defp add_node_to_new_location(doc, node, to_path) do
     case node do

@@ -151,6 +151,40 @@ defmodule Org.WriterTest do
       child = NodeFinder.find_by_path(doc, ["Parent", "Child"])
       assert child.todo_keyword == "DONE"
     end
+
+    test "targets a single duplicate-title sibling via occurrence tuple" do
+      doc = Org.Parser.parse("* TODO Buy milk\n* TODO Buy milk\n")
+
+      doc = Writer.update_node(doc, [{"Buy milk", 1}], &%{&1 | todo_keyword: "DONE"})
+
+      assert Writer.to_org_string(doc) =~ "* TODO Buy milk\n* DONE Buy milk"
+    end
+
+    test "bare title updates only the first matching sibling" do
+      doc = Org.Parser.parse("* TODO Buy milk\n* TODO Buy milk\n")
+
+      doc = Writer.update_node(doc, ["Buy milk"], &%{&1 | todo_keyword: "DONE"})
+
+      assert Writer.to_org_string(doc) =~ "* DONE Buy milk\n* TODO Buy milk"
+    end
+
+    test "addresses same-parent duplicate children by index" do
+      doc = Org.Parser.parse("* Project\n** Task\n** Task\n")
+
+      doc = Writer.update_node(doc, ["Project", {"Task", 0}], &%{&1 | todo_keyword: "TODO"})
+      doc = Writer.update_node(doc, ["Project", {"Task", 1}], &%{&1 | todo_keyword: "DONE"})
+
+      project = NodeFinder.find_by_path(doc, ["Project"])
+      assert Enum.map(project.children, & &1.todo_keyword) == ["TODO", "DONE"]
+    end
+
+    test "out-of-range occurrence index is a no-op" do
+      doc = Org.Parser.parse("* TODO Buy milk\n* TODO Buy milk\n")
+
+      updated = Writer.update_node(doc, [{"Buy milk", 5}], &%{&1 | todo_keyword: "DONE"})
+
+      assert updated == doc
+    end
   end
 
   describe "remove_node/2" do
@@ -170,6 +204,23 @@ defmodule Org.WriterTest do
       assert length(parent.children) == 1
       assert hd(parent.children).title == "Child2"
     end
+
+    test "removes only the indexed duplicate" do
+      doc = Org.Parser.parse("* Project\n** Task\n** Task\n")
+      doc = Writer.remove_node(doc, ["Project", {"Task", 0}])
+
+      project = NodeFinder.find_by_path(doc, ["Project"])
+      assert length(project.children) == 1
+      assert hd(project.children).title == "Task"
+    end
+
+    test "bare title removes only the first matching sibling" do
+      doc = Org.Parser.parse("* A\n* A\n* B")
+      doc = Writer.remove_node(doc, ["A"])
+
+      titles = Enum.map(doc.sections, & &1.title)
+      assert titles == ["A", "B"]
+    end
   end
 
   describe "move_node/3" do
@@ -185,6 +236,18 @@ defmodule Org.WriterTest do
       child = NodeFinder.find_by_path(doc, ["B", "Child"])
       assert child != nil
       assert child.title == "Child"
+    end
+
+    test "moves only the indexed duplicate" do
+      doc = Org.Parser.parse("* A\n** Task\n** Task\n* B")
+      doc = Writer.move_node(doc, ["A", {"Task", 1}], ["B"])
+
+      a = NodeFinder.find_by_path(doc, ["A"])
+      assert length(a.children) == 1
+
+      child = NodeFinder.find_by_path(doc, ["B", "Task"])
+      assert child != nil
+      assert child.title == "Task"
     end
 
     test "moves section to root" do

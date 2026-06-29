@@ -14,8 +14,18 @@ defmodule Org.NodeFinder do
 
   Path can be:
   - A list of section titles: ["Parent", "Child", "Grandchild"]
-  - A list with indices: ["Parent", {:child, 0}, "Grandchild"] (for nth child)
+  - Occurrence-based segments for duplicate titles: ["Parent", {"Child", 1}]
+    selects the second (0-based) sibling titled "Child". A bare title selects
+    the first match.
+  - A list with absolute indices: ["Parent", {:child, 0}, "Grandchild"]
   - A mixed path: ["Parent", {:content, 2}] (for the 3rd content item)
+
+  ## Examples (duplicate titles)
+
+      iex> doc = Org.Parser.parse("* Project\\n** Task\\n** Task")
+      iex> node = Org.NodeFinder.find_by_path(doc, ["Project", {"Task", 1}])
+      iex> node.title
+      "Task"
 
   ## Examples
 
@@ -35,8 +45,12 @@ defmodule Org.NodeFinder do
       {:content, index} when is_integer(index) ->
         Enum.at(contents, index)
 
-      title when is_binary(title) ->
-        find_section_by_title(sections, title, rest)
+      segment ->
+        if Org.PathSegment.title_segment?(segment) do
+          find_section_by_segment(sections, segment, rest)
+        else
+          nil
+        end
     end
   end
 
@@ -51,8 +65,12 @@ defmodule Org.NodeFinder do
       {:content, index} when is_integer(index) ->
         Enum.at(contents, index)
 
-      title when is_binary(title) ->
-        find_child_by_title(children, title, rest)
+      segment ->
+        if Org.PathSegment.title_segment?(segment) do
+          find_child_by_segment(children, segment, rest)
+        else
+          nil
+        end
     end
   end
 
@@ -212,17 +230,17 @@ defmodule Org.NodeFinder do
 
   # Helper functions to reduce nesting depth
 
-  defp find_section_by_title(sections, title, rest) do
-    case Enum.find(sections, fn s -> s.title == title end) do
+  defp find_section_by_segment(sections, segment, rest) do
+    case Org.PathSegment.resolve_index(sections, segment) do
       nil -> nil
-      section -> find_by_path(section, rest)
+      index -> find_by_path(Enum.at(sections, index), rest)
     end
   end
 
-  defp find_child_by_title(children, title, rest) do
-    case Enum.find(children, fn c -> c.title == title end) do
+  defp find_child_by_segment(children, segment, rest) do
+    case Org.PathSegment.resolve_index(children, segment) do
       nil -> nil
-      child -> find_by_path(child, rest)
+      index -> find_by_path(Enum.at(children, index), rest)
     end
   end
 

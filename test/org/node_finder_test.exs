@@ -97,6 +97,27 @@ defmodule Org.NodeFinderTest do
       result = NodeFinder.find_by_path(doc, ["Parent1", {:child, 1}])
       assert result.title == "Child2"
     end
+
+    test "resolves duplicate top-level titles by occurrence" do
+      doc = Org.Parser.parse("* TODO Buy milk\n* DONE Buy milk\n")
+
+      assert NodeFinder.find_by_path(doc, [{"Buy milk", 0}]).todo_keyword == "TODO"
+      assert NodeFinder.find_by_path(doc, [{"Buy milk", 1}]).todo_keyword == "DONE"
+      assert NodeFinder.find_by_path(doc, ["Buy milk"]).todo_keyword == "TODO"
+    end
+
+    test "resolves duplicate child titles by occurrence" do
+      doc = Org.Parser.parse("* Project\n** TODO Task\n** DONE Task\n")
+
+      assert NodeFinder.find_by_path(doc, ["Project", {"Task", 0}]).todo_keyword == "TODO"
+      assert NodeFinder.find_by_path(doc, ["Project", {"Task", 1}]).todo_keyword == "DONE"
+    end
+
+    test "returns nil for out-of-range occurrence index" do
+      doc = Org.Parser.parse("* Task\n* Task\n")
+
+      assert NodeFinder.find_by_path(doc, [{"Task", 2}]) == nil
+    end
   end
 
   describe "find_all/2" do
